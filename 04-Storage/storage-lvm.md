@@ -108,3 +108,89 @@ Add as a callout if you like:
 > Know both — you'll see both in the wild.
 
 ```
+
+## 4. LVM (Logical Volume Manager)
+
+### The LVM stack (bottom + top )
+```
+Physical Disks → /dev/sdb, /dev/sdc
+↓
+Physical Volume → PV (pvcreate)
+↓
+Volume Group → VG (vgcreate) — pool of storage
+↓
+Logical Volume → LV (lvcreate) — usable "partition"
+↓
+Filesystem → mkfs.ext4 /dev/vg_name/lv_name
+↓
+Mount Point → /data
+
+```
+
+  
+**Analogy:** PVs are bricks, VG is the wall you build from them, LVs are rooms you carve out of the wall. ---
+
+
+### Step 1: Create Physical Volume  (PV)
+```
+sudo pvcreat /dev/sdb /dev/sdc 
+sudo pvs   # summary 
+sudo pvdisplay # detailed  
+```
+
+### Step 2: Create Volume Group (VG)
+
+```
+sudo vgcreate /vg_data /dev/sdb /dev/sdc 
+sudo vgs 
+sudo vgdisplay vg_data 
+
+```
+
+## Step 3: Create Logical Volume 
+```
+sudo lvcreate -L 10G -n lv-app vg_data 
+sudo lvcreate  -l 100%FREE -n lv_logs vg_data # use all remaining space  
+sudo lvs  
+sudo lvdisplay 
+```
+
+### Step 4: Format and mount 
+```
+sudo mkfs.ext4 /dev/vg_data/lv_app 
+sudo mkdir /data 
+sudo mount /dev/vg_data1/lv-app /data 
+```
+
+## The killer feature - Extend and LV live (no downtime)
+
+### Extend a Logical Volume  
+```
+# 1. Add space to the  LV
+sudo lvextend -L +5G /dev/vg_data_lv_app 
+
+# 2. Grow the filesystem to match 
+sudo resize2fs /dev/vg_data/lv_app  # for ext4  
+sudo xfs_growfs /data               # fr XFS (mount point1)
+```
+
+### Add new disk to existing VG 
+```
+sudo pvcreate  /dev/sdd 
+sudo vgextend vg_data /dev/sdd 
+sudo vgs   #confirm new size  
+```
+
+```
+## 💡 Interview gold — add this callout
+
+```markdown
+> [!tip] The #1 LVM Interview Question
+> **"How do you extend a filesystem without downtime?"**
+> 1. `lvextend -L +5G /dev/vg/lv`
+> 2. `resize2fs` (ext4) OR `xfs_growfs` (XFS)
+>
+> **Gotcha:** XFS can only GROW, never shrink.
+> ext4 can do both (but shrinking requires unmount).
+```
+
