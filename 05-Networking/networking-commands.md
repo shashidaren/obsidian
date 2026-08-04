@@ -178,3 +178,134 @@ sudo traceroute  -T google.cm
 ```
 ping -c 1 google.com > /dev/null && echo "UP" || echo "DOWN"
 ```
+
+## 5. Firewall  -firewalld and ufw
+
+### UFW  (ubuntu / Debian/ Mint)
+
+### Check firewall status 
+```
+sudo ufw status 
+sudo ufw status verbose 
+```
+
+### Enable and Disable firewall 
+```
+sudo ufw enable 
+sudo ufw disable
+```
+
+### Allow and Deny ports 
+```
+sudo ufw allow 80 
+sudo ufw allow 22
+```
+
+### Allow specific Service by name 
+```
+sudo ufw allow ssh 
+sudo ufw allow http 
+```
+
+### Allow from a specific IP 
+```
+sudo ufw allow from 192.168.1.100
+```
+
+
+### Firewalld (Redhat/Centos/Rocky)
+
+### Check firewall status 
+```
+sudo firewall-command state 
+sudo firewall-command --list-all 
+```
+
+### Allow port permanently
+```
+sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --reload
+```
+
+### Allow service permanently
+```
+sudo firewall-cmd --permanent --add-service=http 
+sudo firewall-cmd --reload
+```
+
+### Remove a rule 
+```
+sudo firewall-cmd --permanent --remove-port=80/tcp
+sudo firewall-cmd --reload
+```
+
+## 6. Network Troubleshooting Checklist
+
+### Step 1 - Check interface is up and has IP
+```
+ip addr show
+```
+
+### Step 2 - Check default gateway exists
+```
+ip route | grep default
+```
+
+### Step 3 - Ping gateway first
+```
+ping -c 4 <gateway-ip>
+```
+
+### Step 4 - Ping external IP (bypass DNS)
+
+```
+ping -c 4 8.8.8.8
+```
+
+### Step 5 - Test DNS resolution
+
+```
+dig google.com +short
+```
+
+### Step 6 - Check DNS config
+
+```
+cat /etc/resolv.conf
+```
+### Step 7 - Check if port is open locally
+```
+ss -tlnp | grep <port>
+```
+
+### Step 8 - Check firewall rules
+```
+sudo ufw status
+sudo firewall-cmd --list-all
+```
+### Step 9 - Trace the route
+```
+traceroute google.com
+```
+
+### Step 10 - Check logs for errors
+
+```
+sudo journalctl -u NetworkManager --since today
+```
+
+
+## Quick Reference
+```
+| Command | Purpose |
+|---------|---------|
+| ip a | Show interfaces and IPs |
+| ip r | Show routing table |
+| ss -tlnp | Show listening ports |
+| dig +short | Quick DNS lookup |
+| ping -c 4 | Test connectivity |
+| traceroute | Find broken hop |
+| ufw status | Check firewall (Ubuntu) |
+| firewall-cmd --list-all | Check firewall (RHEL) |
+```
+
