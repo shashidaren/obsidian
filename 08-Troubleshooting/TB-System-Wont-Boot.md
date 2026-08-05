@@ -190,6 +190,3 @@ uptime
 
 ---
 
-**Ready for the next scenario?**
-
-`TB-Disk-Full.md` — Happens on every server, every admin faces this! 🚀
