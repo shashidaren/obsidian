@@ -4,9 +4,12 @@
 
 - [[Daily Server Checklist ]]
 - [[Systemd Commands]]
+- [[storage-lvm]]
 - [[Storage LVM cheat sheet]]
-- [[Networking Commands]]
+- [[networking-commands]]
 - [[User Management]]
+- [[user-management-security]]
+- [[Package-Management]]
 - [[Troubleshooting Checklist]]
 - [[Interview Questions]]
 

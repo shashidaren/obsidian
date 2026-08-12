@@ -133,7 +133,7 @@ Mount Point → /data
 
 ### Step 1: Create Physical Volume  (PV)
 ```
-sudo pvcreat /dev/sdb /dev/sdc 
+sudo pvcreate /dev/sdb /dev/sdc 
 sudo pvs   # summary 
 sudo pvdisplay # detailed  
 ```
