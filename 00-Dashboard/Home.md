@@ -5,7 +5,6 @@
 - [[Daily Server Checklist ]]
 - [[Systemd Commands]]
 - [[storage-lvm]]
-- [[Storage LVM cheat sheet]]
 - [[networking-commands]]
 - [[User Management]]
 - [[user-management-security]]
