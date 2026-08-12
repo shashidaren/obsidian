@@ -10,6 +10,7 @@
 - [[user-management-security]]
 - [[Package-Management]]
 - [[Troubleshooting Checklist]]
+- [[_Automation-Index.md]]
 - [[Interview Questions]]
 
 ## Today i reviewed 
