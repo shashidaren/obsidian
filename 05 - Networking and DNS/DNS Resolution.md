@@ -1,55 +1,69 @@
 # DNS Resolution
 
 ## Concept
-Resolution can involve local caches, `/etc/resolv.conf`, systemd-resolved, search domains and authoritative servers.
 
-## Why it matters
-Compare application behavior with `getent` and direct queries rather than relying only on `dig`.
+DNS turns names into addresses (and other records). On a Linux host the resolution path is usually:
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
-
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
-
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Application → glibc / nsswitch → resolv.conf / systemd-resolved → recursive resolvers → authoritative servers
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Why it matters
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+Many “network” problems are actually DNS problems.  
+Applications can behave differently from command-line tools because they may use different libraries, caches, or search domains.
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+## Mental Model
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+1. Application calls `getaddrinfo()` (or similar).
+2. Name Service Switch (`/etc/nsswitch.conf`) decides the order (files, dns, etc.).
+3. DNS configuration comes from `/etc/resolv.conf` (which may be managed by NetworkManager, systemd-resolved, etc.).
+4. Query goes to the configured resolvers.
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+## Key Commands
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+```bash
+# What the system libraries resolve (closest to most applications)
+getent hosts example.com
+getent ahosts example.com
+
+# Direct DNS query tools
+dig example.com
+dig +short example.com
+dig @8.8.8.8 example.com
+
+# Check local configuration
+cat /etc/resolv.conf
+cat /etc/nsswitch.conf | grep hosts
+
+# systemd-resolved (common on modern distributions)
+resolvectl status
+resolvectl query example.com
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Likely cause                              | First checks                     |
+|--------------------------------------|-------------------------------------------|----------------------------------|
+| Works with dig, fails in application | Search domain, nsswitch, or different resolver | `getent`, `/etc/nsswitch.conf`  |
+| Intermittent resolution              | Flaky upstream resolver or rate limiting  | Try different resolvers          |
+| NXDOMAIN for valid name              | Wrong search domain or split DNS          | `dig` with absolute name (trailing dot) |
+| Slow resolution                      | Timeout on first resolver                 | `resolv.conf` order, timeouts    |
+| Only some hosts affected             | Caching resolver or /etc/hosts            | Compare with another machine     |
+
+## Investigation Tips
+
+- Always test with both `getent` and `dig`.
+- Use a trailing dot (`example.com.`) to disable search domains.
+- Check whether `systemd-resolved` or NetworkManager is managing `resolv.conf`.
+- In containers, DNS is often controlled by the runtime or CNI plugin.
+
+## Related Notes
+
+- [[TCP IP Troubleshooting Model]]
+- [[dig Deep Dive]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
