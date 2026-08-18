@@ -1,55 +1,88 @@
 # Logging Architecture
 
 ## Concept
-Applications may write to files, stdout, journald, syslog or remote collectors.
 
-## Why it matters
-Know the path from event generation to retention before assuming logs are missing.
+Logs can be written in several places and then collected, forwarded, and stored. A typical path looks like:
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
-
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
-
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Application
+    ↓
+stdout / stderr / log file / journald / syslog
+    ↓
+Local agent (Fluent Bit, rsyslog, Promtail, etc.)
+    ↓
+Central system (Loki, Elasticsearch, Splunk, cloud logging…)
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Why it matters
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+When someone says “the logs are missing”, you need to know:
+1. Where the application actually writes
+2. Whether a local agent is collecting them
+3. Whether they are being forwarded and retained centrally
+4. Retention and disk limits on each stage
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+## Mental Model
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+```
+Generation → Local storage / journal → Collection agent → Central store → Retention / search
+```
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+Each hop can drop, delay, or filter messages.
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+## Common Local Destinations
+
+| Destination     | Typical use                              |
+|-----------------|------------------------------------------|
+| stdout / stderr | Containers (Kubernetes, Docker)          |
+| journald        | systemd services                         |
+| Files under /var/log | Traditional applications, rsyslog     |
+| Application-specific files | Java, custom apps                   |
+
+## Key Investigation Commands
+
+```bash
+# systemd / journal
+journalctl -u <service> -b
+journalctl --disk-usage
+
+# Classic files
+ls -l /var/log
+tail -f /var/log/syslog
+
+# Container logs
+kubectl logs <pod>
+docker logs <container>
+
+# Disk pressure from logs
+du -sh /var/log/*
+journalctl --disk-usage
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Likely stage                              | First checks                     |
+|--------------------------------------|-------------------------------------------|----------------------------------|
+| No logs for a service                | Generation or local collection            | Is the app writing? journald/file permissions |
+| Logs stop after some time            | Disk full / retention limits              | `df`, journald config, logrotate |
+| Logs present locally, missing centrally | Agent or network                       | Agent status, forwarder logs     |
+| High disk usage by logs              | Rotation / retention misconfigured        | logrotate, journald SystemMaxUse |
+
+## Investigation Tips
+
+- Always establish the full path from application to final storage.
+- In Kubernetes, applications should log to stdout/stderr; node agents collect them.
+- Check both retention settings and disk space — they interact.
+- Timestamps and timezones frequently cause confusion when correlating logs across systems.
+
+## Related Notes
+
+- [[journalctl Deep Dive]]
+- [[journald and Persistent Storage]]
+- [[logrotate]]
+- [[rsyslog]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
