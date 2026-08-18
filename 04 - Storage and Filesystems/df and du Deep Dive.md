@@ -1,55 +1,73 @@
 # df and du Deep Dive
 
 ## Concept
-`df` reports filesystem allocation while `du` walks visible directory contents.
+
+- **`df`** reports filesystem-level allocation (what the filesystem thinks is used/free).
+- **`du`** walks the directory tree and sums the size of files it can see.
+
+They often disagree. Understanding *why* is a core troubleshooting skill.
 
 ## Why it matters
-A mismatch can indicate deleted open files, mount boundaries or permission/namespace differences.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+A large gap between `df` and `du` usually means one of:
+- Deleted files that are still held open by a process
+- Mount points hiding data
+- Permission or namespace differences
+- Different filesystems / bind mounts
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+df  = “How full is the filesystem?”
+du  = “How much space do the visible files under this path consume?”
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+When `df` shows high usage but `du` shows much less → look for deleted-but-open files or data hidden under mount points.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Filesystem usage
+df -hT
+df -i
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Directory usage (one level)
+du -xhd1 /var 2>/dev/null | sort -hr | head -20
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Summary of a tree
+du -sh /var/log
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Exclude other filesystems (-x is important)
+du -xhd1 / 2>/dev/null | sort -hr
+
+# Find large files
+find /var -xdev -type f -size +100M -exec ls -lh {} \; 2>/dev/null | sort -k5 -hr | head
+```
+
+## Common Discrepancy Causes
+
+| Situation                        | What you see                     | How to confirm                      |
+|----------------------------------|----------------------------------|-------------------------------------|
+| Deleted file still open          | df high, du lower                | `lsof +L1` or `lsof | grep deleted` |
+| Data under a mount point         | du on parent misses the data     | `findmnt`, `mount`, check order     |
+| Permission denied                | du under-reports                 | Run as root, check errors           |
+| Different filesystem             | du without -x crosses mounts     | Always use `-x` or `-xdev`          |
+| Sparse files                     | du and ls can differ             | `ls -ls`, `du --apparent-size`      |
+
+## Investigation Tips
+
+- Always use `du -x` (or `find -xdev`) when investigating a single filesystem.
+- When `df` and `du` disagree significantly, run `lsof +L1` first.
+- For interactive exploration, `ncdu -x /path` is excellent if available.
+
+## Related Notes
+
+- [[Disk Full Runbook]]
+- [[Inodes]]
+- [[lsof Deep Dive]]
+- [[Filesystems and Mounts]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
