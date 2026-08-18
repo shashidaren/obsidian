@@ -1,55 +1,75 @@
 # lsof Deep Dive
 
 ## Concept
-`lsof` maps open files and sockets to processes.
+
+`lsof` (list open files) shows which processes have which files, directories, sockets, and other file descriptors open.  
+In Linux almost everything is a file, so `lsof` is extremely useful.
 
 ## Why it matters
-It is essential for deleted-but-open files, port ownership and descriptor investigations.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+Classic use cases:
+- Finding which process is using a file or port
+- Discovering deleted files that are still held open (and therefore still consuming space)
+- Investigating file descriptor leaks
+- Seeing network connections per process
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+lsof shows the link between:
+Process  ←→  File Descriptor  ←→  File / Socket / Pipe / etc.
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Key Commands
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+```bash
+# Files opened by a process
+lsof -p <PID>
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+# Process that has a specific file open
+lsof /var/log/nginx/access.log
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Deleted files still held open (very common in disk-full situations)
+lsof +L1
+lsof | grep deleted
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Network connections
+lsof -i
+lsof -i :80
+lsof -i TCP:443
+lsof -i UDP
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Files opened by a user
+lsof -u <username>
+
+# Count open files per process (rough FD usage)
+lsof | awk '{print $2}' | sort | uniq -c | sort -nr | head
+```
+
+## Common Failure Modes & Symptoms
+
+| Situation                            | Useful lsof command              |
+|--------------------------------------|----------------------------------|
+| Disk full but du looks normal        | `lsof +L1`                       |
+| “Too many open files”                | `lsof -p <PID>` + count FDs      |
+| Who is listening on this port?       | `lsof -i :<port>`                |
+| Which process has this file open?    | `lsof /path/to/file`             |
+| FD leak investigation                | Watch `lsof -p <PID> | wc -l` over time |
+
+## Investigation Tips
+
+- `+L1` is one of the most valuable flags for disk space incidents.
+- When a process holds a deleted file open, the space is only released when the process closes the FD or exits.
+- `lsof` can be slow on systems with huge numbers of open files — narrow the scope with `-p`, `-u`, or `-i` when possible.
+- For listening ports, `ss -tulpn` is often faster and clearer; use `lsof` when you need more detail about the file or process.
+
+## Related Notes
+
+- [[File Descriptors]]
+- [[Disk Full Runbook]]
+- [[ss Deep Dive]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
