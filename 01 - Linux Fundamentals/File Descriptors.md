@@ -1,55 +1,90 @@
 # File Descriptors
 
 ## Concept
-File descriptors represent open files, sockets and similar resources.
+
+A **file descriptor** (FD) is a handle that a process uses to access a file, socket, pipe, or other I/O resource.  
+Every process starts with three standard FDs:
+
+- 0 = stdin
+- 1 = stdout
+- 2 = stderr
+
+New FDs are allocated when the process opens files, accepts connections, creates pipes, etc.
 
 ## Why it matters
-Exhaustion can make an otherwise healthy application unable to accept connections or open files.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+When a process hits its FD limit it can no longer:
+- Accept new network connections
+- Open files or logs
+- Create pipes or sockets
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+This often surfaces as “Too many open files” errors and can make an otherwise healthy service unavailable.
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+## Mental Model
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Process
+└── FD table
+    ├── 0 → terminal / pipe
+    ├── 1 → terminal / pipe
+    ├── 2 → terminal / pipe
+    ├── 3 → regular file
+    ├── 4 → listening socket
+    ├── 5 → accepted connection
+    └── ...
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Limits exist at two levels:
+- Per-process limit (`ulimit -n` / `LimitNOFILE`)
+- System-wide limit (`fs.file-max`)
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Current limits for the shell
+ulimit -n
+ulimit -a
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Limits of a running process
+cat /proc/<PID>/limits | grep 'open files'
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# How many FDs a process is using
+ls /proc/<PID>/fd | wc -l
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# What the FDs point to
+ls -l /proc/<PID>/fd
+lsof -p <PID>
+
+# System-wide usage
+cat /proc/sys/fs/file-nr          # allocated, free, max
+
+# Find processes with many open files
+lsof | awk '{print $2}' | sort | uniq -c | sort -nr | head
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Likely cause                         | First checks                        |
+|--------------------------------------|--------------------------------------|-------------------------------------|
+| “Too many open files” in logs        | Process hit its nofile limit         | `cat /proc/<PID>/limits`, `lsof`    |
+| Service cannot accept new connections| FD exhaustion on listening process   | Count of FDs for that PID           |
+| Gradual increase in open files       | FD leak (forgot to close)            | Watch `ls /proc/<PID>/fd | wc -l`   |
+| High system-wide FD usage            | Many processes or system limit too low | `cat /proc/sys/fs/file-nr`        |
+
+## Investigation Tips
+
+- Always check both the process limit and the actual number of open FDs.
+- For systemd services, look at `LimitNOFILE` in the unit file or drop-in.
+- In containers, the limit may be set by the runtime or cgroup.
+- `lsof +L1` is also useful when investigating deleted-but-still-open files.
+
+## Related Notes
+
+- [[Processes and Threads]]
+- [[lsof Deep Dive]]
+- [[ss Deep Dive]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
