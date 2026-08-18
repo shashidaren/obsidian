@@ -1,55 +1,73 @@
 # curl Deep Dive
 
 ## Concept
-`curl` tests application protocols and can show DNS, TLS, headers, redirects and timing.
+
+`curl` is the Swiss-army knife for testing HTTP/HTTPS (and many other protocols).  
+It can show DNS resolution, TCP connect, TLS handshake, headers, redirects, and timing breakdowns.
 
 ## Why it matters
-Testing localhost and the external path separately helps isolate layers.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+When an application or user reports “the site is down”, `curl` lets you test the exact path from the server (or your machine) and see which layer fails.
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+curl -v   → verbose: DNS → Connect → TLS → Request → Response
+curl -w   → write-out: precise timing metrics
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Key Commands
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+```bash
+# Basic verbose request (most useful starting point)
+curl -v https://example.com
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+# Show only headers
+curl -I https://example.com
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Follow redirects
+curl -vL https://example.com
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Timing breakdown
+curl -w "\nDNS: %{time_namelookup}\nConnect: %{time_connect}\nTLS: %{time_appconnect}\nTTFB: %{time_starttransfer}\nTotal: %{time_total}\n" -o /dev/null -s https://example.com
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Test from specific interface or with custom resolve
+curl --interface eth0 https://example.com
+curl --resolve example.com:443:1.2.3.4 https://example.com
+
+# Ignore certificate errors (testing only)
+curl -vk https://example.com
+
+# POST / with data
+curl -v -X POST -d 'key=value' https://example.com/api
+```
+
+## Common Failure Modes & Symptoms
+
+| What curl shows                      | Likely layer                     | Next step                        |
+|--------------------------------------|----------------------------------|----------------------------------|
+| Could not resolve host               | DNS                              | [[DNS Resolution]]               |
+| Connection timed out                 | Network / firewall / routing     | [[TCP IP Troubleshooting Model]] |
+| Connection refused                   | Nothing listening or firewall    | `ss -tulpn` on target            |
+| SSL certificate problem              | TLS / certificate                | `openssl s_client`               |
+| HTTP 5xx                             | Application                      | Application logs                 |
+| Slow TTFB                            | Backend / application            | App metrics & logs               |
+
+## Investigation Tips
+
+- Always test both by name and by IP when possible.
+- Use `-v` first to see the full handshake.
+- The `-w` timing format is excellent for quantifying slowness.
+- From the server itself, `curl localhost` or `curl 127.0.0.1` helps separate local vs external path issues.
+
+## Related Notes
+
+- [[TCP IP Troubleshooting Model]]
+- [[DNS Resolution]]
+- [[TLS Troubleshooting]]
+- [[ss Deep Dive]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
