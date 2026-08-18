@@ -1,55 +1,76 @@
 # Resource Requests and Limits
 
 ## Concept
-Requests influence scheduling; limits constrain runtime resources.
 
-## Why it matters
-Poor sizing can cause pending pods, throttling or OOM kills.
+In Kubernetes every container can declare:
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- **Requests** – the amount of CPU/memory the scheduler uses when placing the Pod
+- **Limits** – the maximum the container is allowed to use at runtime
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
-
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```yaml
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Why it matters
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+- Too high requests → Pods stay Pending (not enough free resources on nodes)
+- Too low limits → CPU throttling or OOMKilled
+- No requests/limits → noisy neighbour problems and poor scheduling
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+## Mental Model
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+```
+Request  = “I need at least this much to be scheduled”
+Limit    = “I must not use more than this at runtime”
+```
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+- CPU is compressible (throttling)
+- Memory is not (OOM Killer)
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+## Key Commands
+
+```bash
+# See requests and limits on a Pod
+kubectl describe pod <pod> -n <ns> | grep -A10 -E 'Limits|Requests'
+
+# Actual usage (requires metrics-server)
+kubectl top pods -n <ns>
+kubectl top nodes
+
+# Node allocatable resources
+kubectl describe node <node> | grep -A10 Allocatable
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                          | Likely cause                              | What to check                    |
+|----------------------------------|-------------------------------------------|----------------------------------|
+| Pod stuck Pending                | Insufficient free CPU/memory for requests | `describe pod` Events, node resources |
+| OOMKilled                        | Memory limit too low or application leak  | Limits vs actual usage, logs     |
+| High latency / throttling        | CPU limit too low                         | CPU usage vs limit               |
+| Node pressure / eviction         | Too many Pods without proper requests     | Node conditions, eviction events |
+
+## Investigation Tips
+
+- Always compare **requests**, **limits**, and **actual usage** (`kubectl top`).
+- A Pod can be scheduled based on requests but still be OOMKilled if it hits its memory limit.
+- Setting only limits (without requests) can lead to overcommitment surprises.
+- Use ResourceQuotas and LimitRanges in namespaces for governance.
+
+## Related Notes
+
+- [[Pod Troubleshooting]]
+- [[Kubernetes Architecture]]
+- [[Memory Management]]
+- [[Memory Pressure Runbook]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
