@@ -1,5 +1,0 @@
-[[Bash-Basics.md]]
-[[Ansible-Basics.md]]
-[[Bash-Scripting-Patterns.md]]
-[[Cron-Guide.md]]
-[[Python-for-Sysadmins.md]]

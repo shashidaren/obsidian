@@ -1,1 +1,8 @@
-{}
+{
+  "cssTheme": "Willemstad",
+  "theme": "moonstone",
+  "baseFontSize": 15,
+  "interfaceFontFamily": "Inter",
+  "accentColor": "#4058ba",
+  "textFontFamily": "Inter"
+}
