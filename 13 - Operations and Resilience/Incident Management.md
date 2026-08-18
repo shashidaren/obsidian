@@ -1,55 +1,74 @@
 # Incident Management
 
 ## Concept
-Incident response coordinates technical recovery, communication and evidence.
+
+Incident management is the process of detecting, responding to, recovering from, and learning from unplanned interruptions or degradations of service.
 
 ## Why it matters
-Clear roles prevent duplicated work and missed decisions.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+Good technical skills alone are not enough during an incident.  
+Clear roles, communication, and evidence handling determine how fast you recover and how much you learn.
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model – Simple Lifecycle
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+1. Detect
+2. Triage / Declare
+3. Investigate & Mitigate
+4. Recover
+5. Communicate
+6. Post-incident review
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Roles (even in a small team)
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+| Role                  | Responsibility                              |
+|-----------------------|---------------------------------------------|
+| Incident Commander    | Overall coordination, decisions, priorities |
+| Technical Lead        | Hands-on investigation and mitigation       |
+| Communications        | Updates to stakeholders / users             |
+| Scribe (optional)     | Timeline and actions log                    |
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+In very small teams one person may wear several of these hats — the important thing is to be explicit.
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+## Practical Guidelines During an Incident
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+1. **Declare early** – better to downgrade later than to lose time.
+2. **Protect evidence** – capture logs, metrics, and state before restarting or deleting.
+3. **One change at a time** – so you know what fixed (or broke) things.
+4. **Keep a timeline** – even rough notes help the postmortem.
+5. **Communicate status** – even if the update is “still investigating”.
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+## Useful Commands for the Technical Side
+
+```bash
+# Quick system snapshot
+date; uptime; free -h; df -hT; systemctl --failed
+
+# Capture relevant logs
+journalctl -b -p err > /tmp/errors.txt
+journalctl -u <service> --since "1 hour ago" > /tmp/service.log
+
+# Kubernetes
+kubectl get pods -A -o wide
+kubectl describe pod <pod> -n <ns>
+kubectl logs <pod> -n <ns> --previous
+```
+
+## After the Incident
+
+- Write a short postmortem (use the template in `99 - Templates`).
+- Focus on contributing factors and concrete corrective actions, not blame.
+- Track follow-up items to completion.
+
+## Related Notes
+
+- [[Troubleshooting Methodology]]
+- [[Performance Investigation Framework]]
+- [[Root Cause Analysis]]
+- [[Documentation and Runbooks]]
+- Incident Postmortem Template
+
+## Personal Lessons Learned
+
+> 
