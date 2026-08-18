@@ -1,55 +1,85 @@
 # systemctl Deep Dive
 
 ## Concept
-`systemctl` controls and inspects systemd units. `status` summarizes state, while `cat`, `show` and dependency inspection expose configuration.
+
+`systemctl` is the main interface for controlling systemd.  
+It manages units (services, sockets, timers, mounts, targets, etc.), shows their state, and lets you start/stop/restart/enable them.
 
 ## Why it matters
-Use the journal to understand why a unit failed rather than repeatedly restarting it.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+Almost every modern Linux service is a systemd unit.  
+Understanding how to inspect state, dependencies, and failure reasons is essential for day-to-day operations and incident response.
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+systemctl status <unit>     → current state + recent logs
+systemctl cat <unit>        → effective unit file content
+systemctl show <unit>       → all properties
+systemctl list-dependencies → what it needs / what needs it
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Key Commands
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+```bash
+# Overview of failed units
+systemctl --failed
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+# Status of a service (most used command)
+systemctl status <service>
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Detailed properties
+systemctl show <service> | grep -E 'ActiveState|SubState|MainPID|FragmentPath|DropInPaths'
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Effective configuration (after drop-ins)
+systemctl cat <service>
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Dependencies
+systemctl list-dependencies <service>
+systemctl list-dependencies --reverse <service>
+
+# Enable / disable (start at boot)
+systemctl enable <service>
+systemctl disable <service>
+
+# Restart / reload
+systemctl restart <service>
+systemctl reload <service>          # if supported
+systemctl try-restart <service>     # only if already running
+```
+
+### Useful listing commands
+
+```bash
+systemctl list-units --type=service --state=running
+systemctl list-unit-files --type=service
+systemctl list-timers
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                          | First commands to run                     |
+|----------------------------------|-------------------------------------------|
+| Service won’t start              | `systemctl status`, `journalctl -u`       |
+| Service starts then dies         | `journalctl -u <service> -b`, look for exit code |
+| Changes not taking effect        | `systemctl cat` (check drop-ins), daemon-reload |
+| Unit not found                   | Check spelling, `systemctl list-unit-files` |
+| Dependency loop or ordering issue| `systemctl list-dependencies`             |
+
+## Investigation Tips
+
+- After any unit file change: `systemctl daemon-reload`.
+- Prefer `systemctl status` + `journalctl -u <service> -b` over just restarting repeatedly.
+- Drop-in files (`*.conf` under `/etc/systemd/system/<unit>.d/`) override the main unit — always check `systemctl cat`.
+- Exit codes and “status=” lines in the journal are often the fastest path to root cause.
+
+## Related Notes
+
+- [[journalctl Deep Dive]]
+- [[systemd Units]]
+- [[systemd Timers]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
