@@ -1,55 +1,93 @@
 # tcpdump Deep Dive
 
 ## Concept
-`tcpdump` captures packets for protocol-level evidence.
+
+`tcpdump` captures and displays packets on a network interface.  
+It is the standard tool for proving what is actually happening on the wire.
 
 ## Why it matters
-Filter aggressively in production and protect captured sensitive data.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+When higher-level tools (`curl`, application logs, `ss`) are not enough, packet captures give definitive evidence about:
+- Whether packets are arriving
+- TCP handshakes and resets
+- Retransmissions
+- DNS queries/responses
+- TLS ClientHello / ServerHello (when not encrypted in a way that hides everything)
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+tcpdump [options] [filter expression]
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Filters are written in BPF (Berkeley Packet Filter) syntax and are critical for keeping captures usable in production.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Basic capture on an interface
+tcpdump -i eth0
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Don’t resolve names (faster, clearer)
+tcpdump -i eth0 -n
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Capture only a specific host or port
+tcpdump -i eth0 host 10.0.0.5
+tcpdump -i eth0 port 443
+tcpdump -i eth0 host 10.0.0.5 and port 443
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Write to a file (then analyse with Wireshark or tcpdump -r)
+tcpdump -i eth0 -w capture.pcap host 10.0.0.5
+
+# Read a saved capture
+tcpdump -r capture.pcap -n
+
+# Show more packet content
+tcpdump -i eth0 -A          # ASCII
+tcpdump -i eth0 -X          # hex + ASCII
+
+# Limit number of packets
+tcpdump -i eth0 -c 100 port 80
+```
+
+### Useful filter examples
+
+```bash
+# SYN packets only (useful for connection attempts)
+tcpdump -i eth0 'tcp[tcpflags] & tcp-syn != 0'
+
+# Traffic to/from a subnet
+tcpdump -i eth0 net 10.0.0.0/24
+
+# DNS
+tcpdump -i eth0 port 53
+```
+
+## Common Use Cases
+
+| Goal                              | Example filter / approach                  |
+|-----------------------------------|--------------------------------------------|
+| Is traffic reaching the server?   | `host <client-ip>` or `port <service>`     |
+| TCP handshake problems            | Look for SYN / SYN-ACK / RST               |
+| DNS issues                        | `port 53`                                  |
+| Prove packets are leaving         | Capture on the correct interface           |
+| Intermittent problems             | Capture to file with a reasonable snaplen  |
+
+## Investigation Tips
+
+- Always use `-n` in production troubleshooting to avoid DNS delays and noise.
+- Prefer writing to a file (`-w`) for anything non-trivial, then analyse offline.
+- Be careful with captures on busy interfaces — use tight filters.
+- Remember that encrypted traffic (TLS) will not show application payloads.
+- On modern systems, consider `tcpdump` vs `tshark` / Wireshark depending on need.
+
+## Related Notes
+
+- [[TCP IP Troubleshooting Model]]
+- [[ss Deep Dive]]
+- [[curl Deep Dive]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
