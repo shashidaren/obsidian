@@ -1,55 +1,92 @@
 # journalctl Deep Dive
 
 ## Concept
-The systemd journal stores structured logs and can filter by boot, unit, priority and time.
+
+`journalctl` queries the systemd journal — a structured, indexed log store.  
+It can filter by time, boot, unit, priority, PID, and many other fields.
 
 ## Why it matters
-Always correlate logs with a precise incident window.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+Most modern Linux troubleshooting starts (or ends) in the journal.  
+Being able to quickly narrow logs to the exact incident window and unit saves a lot of time.
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+journalctl [filters]     → shows matching log lines
+-b / --boot              → current or previous boots
+-u / --unit              → specific systemd unit
+-p / --priority          → severity (err, warning, etc.)
+--since / --until        → time window
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Key Commands
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+```bash
+# Current boot, all errors
+journalctl -p err -b
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+# Specific service, current boot
+journalctl -u nginx -b
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Follow a service live
+journalctl -u nginx -f
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Time window
+journalctl --since "2026-08-18 10:00:00" --until "2026-08-18 11:00:00"
+journalctl --since "10 min ago"
+journalctl --since today
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Previous boot
+journalctl -b -1
+
+# Kernel messages only
+journalctl -k
+
+# Show reverse (newest first)
+journalctl -r -u nginx -n 50
+
+# Output in JSON (useful for scripting)
+journalctl -u nginx -o json-pretty
+```
+
+### Priority levels (useful with -p)
+
+```
+0 emerg, 1 alert, 2 crit, 3 err, 4 warning, 5 notice, 6 info, 7 debug
+```
+
+## Common Patterns for Incidents
+
+```bash
+# What failed during this boot?
+journalctl -p err -b
+
+# Why did this service fail?
+journalctl -u <service> -b --no-pager
+
+# Correlate with a time
+journalctl --since "30 min ago" -p warning
+
+# Look at a specific PID
+journalctl _PID=<pid>
+```
+
+## Investigation Tips
+
+- Always start with a time window when possible — the journal can be huge.
+- `-b` limits to the current boot and is usually what you want during an incident.
+- Use `--no-pager` when piping or capturing output.
+- Persistent journal (if configured) survives reboots and is extremely valuable.
+- Combine with `systemctl status` — status already shows the most recent journal lines.
+
+## Related Notes
+
+- [[systemctl Deep Dive]]
+- [[systemd Units]]
+- [[Logging Architecture]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
