@@ -1,55 +1,67 @@
 # Swap and OOM Killer
 
 ## Concept
-Swap extends virtual memory but can introduce latency. When memory cannot be reclaimed sufficiently, the kernel may invoke the OOM killer.
+
+**Swap** is disk space used as an extension of RAM. When the kernel needs more memory than is currently free + reclaimable, it can move anonymous pages to swap.
+
+The **OOM Killer** (Out-Of-Memory Killer) is the kernel’s last resort: when it cannot free enough memory, it chooses a process to kill in order to keep the system running.
 
 ## Why it matters
-Find the pressure source before simply adding memory or swap.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- Heavy swapping causes severe latency (disk is orders of magnitude slower than RAM).
+- OOM kills are abrupt and can take down critical services.
+- Both are symptoms of memory pressure — treating only the symptom (adding swap or restarting) without finding the cause leads to repeated incidents.
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+1. Application needs memory → kernel tries to reclaim cache / unused pages.
+2. If still not enough → kernel starts swapping anonymous pages.
+3. If swapping is not enough or too slow → OOM killer is invoked.
+4. OOM killer scores processes (based on memory usage, niceness, oom_score_adj, etc.) and kills the chosen one.
 
-## Useful commands
+## Key Commands
+
 ```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+# Swap usage
+free -h
+swapon --show
+cat /proc/swaps
+
+# Swap activity (si = swap in, so = swap out)
+vmstat 1 5
+
+# OOM events
+dmesg -T | grep -iE 'out of memory|oom-killer|killed process'
+journalctl -k | grep -iE 'oom|out of memory'
+
+# Current OOM scores (higher = more likely to be killed)
+for p in /proc/[0-9]*; do
+  echo "$(cat $p/oom_score 2>/dev/null) $(cat $p/oom_score_adj 2>/dev/null) $(cat $p/comm 2>/dev/null)"
+done 2>/dev/null | sort -nr | head -15
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Common Failure Modes & Symptoms
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+| Symptom                         | Likely cause                       | First checks                    |
+|---------------------------------|------------------------------------|---------------------------------|
+| System very slow, high iowait   | Heavy swapping                     | `vmstat`, `free -h`             |
+| Process suddenly disappears     | OOM killer                         | `dmesg`, journal                |
+| Swap almost full                | Sustained memory pressure          | Top memory consumers            |
+| Repeated OOM of same service    | Memory leak or undersized limits   | Process growth over time        |
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+## Investigation Tips
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+- After an OOM event, always read the full oom-killer report in `dmesg` — it shows the memory state and the chosen victim.
+- `oom_score_adj` can be used to protect critical processes (e.g. -1000) or make others more killable.
+- In containers, the OOM killer can act inside the cgroup even when the host still has memory.
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+## Related Notes
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+- [[Memory Management]]
+- [[Memory Pressure Runbook]]
+- [[vmstat Deep Dive]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
