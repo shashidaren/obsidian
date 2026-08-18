@@ -1,55 +1,76 @@
 # Persistent Storage
 
 ## Concept
-PersistentVolume abstractions connect workloads to storage providers.
+
+Kubernetes abstracts storage with:
+
+- **PersistentVolume (PV)** – actual storage resource (NFS, cloud disk, local, etc.)
+- **PersistentVolumeClaim (PVC)** – request for storage by a user/Pod
+- **StorageClass** – dynamic provisioning template
+
+Pods mount PVCs as volumes.
 
 ## Why it matters
-Binding, attachment, permissions and filesystem state can each fail independently.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+Storage issues are a frequent source of Pending Pods, data loss risk, and performance problems.  
+Binding, attaching, mounting, and permissions can each fail independently.
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+StorageClass (optional)
+    ↓ dynamic provisioning
+PersistentVolume (PV)
+    ↓ bound to
+PersistentVolumeClaim (PVC)
+    ↓ mounted by
+Pod
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Static provisioning: admin creates PV, user creates PVC that matches it.  
+Dynamic provisioning: PVC triggers creation of a PV via a StorageClass.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Overview
+kubectl get pv
+kubectl get pvc -A
+kubectl get storageclass
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Details
+kubectl describe pv <pv>
+kubectl describe pvc <pvc> -n <ns>
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# See what a Pod is mounting
+kubectl describe pod <pod> -n <ns> | grep -A20 Mounts
+```
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Likely cause                              | First checks                     |
+|--------------------------------------|-------------------------------------------|----------------------------------|
+| Pod Pending – “unbound PVC”          | No matching PV or StorageClass issue      | `kubectl get pvc`, Events        |
+| PVC stuck in Pending                 | No StorageClass / provisioning failure    | StorageClass, provisioner logs   |
+| Mount errors in Pod events           | Attach/mount failure, permissions, FS issues | `describe pod`, node logs     |
+| Data missing after Pod restart       | Using emptyDir instead of PVC             | Volume definition in Pod         |
+| Performance problems                 | Slow underlying storage or wrong access mode | Storage backend, ReadWriteOnce vs Many |
+
+## Investigation Tips
+
+- Always look at both the PVC and the PV.
+- Check the Events on the PVC and the Pod.
+- Access modes matter: `ReadWriteOnce` can usually only be mounted by one node at a time.
+- For cloud volumes, also check the cloud provider console (volume attachment state).
+- Deleting a PVC can delete the underlying volume depending on the reclaim policy (`Retain` vs `Delete`).
+
+## Related Notes
+
+- [[Kubernetes Architecture]]
+- [[Pod Troubleshooting]]
+- [[Docker Operations]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
