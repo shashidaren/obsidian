@@ -1,55 +1,74 @@
 # ip Command Deep Dive
 
 ## Concept
-`ip` manages and inspects addresses, links, routes and neighbors.
+
+The `ip` command (from iproute2) is the modern tool for managing and inspecting network interfaces, addresses, routes, and neighbours. It replaces most uses of the old `ifconfig` and `route` commands.
 
 ## Why it matters
-It replaces many older `ifconfig` and `route` workflows.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+Almost every network troubleshooting session starts with checking interface state, addresses, and routes. `ip` gives a clear, consistent view.
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+ip link      → interfaces (up/down, MAC, MTU)
+ip addr      → addresses on interfaces
+ip route     → routing table
+ip neigh     → ARP / neighbour table
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Key Commands
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+```bash
+# Interfaces
+ip link show
+ip link set eth0 up
+ip link set eth0 down
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+# Addresses
+ip addr show
+ip addr show eth0
+ip addr add 192.0.2.10/24 dev eth0
+ip addr del 192.0.2.10/24 dev eth0
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Routes
+ip route show
+ip route show table main
+ip route get 1.1.1.1                # how will this packet be routed?
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Neighbours (ARP)
+ip neigh show
+ip neigh show dev eth0
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Brief overview
+ip -br link
+ip -br addr
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                          | What to check with ip                  |
+|----------------------------------|----------------------------------------|
+| Interface appears down           | `ip link show`                         |
+| No IP address                    | `ip addr show`                         |
+| Cannot reach other networks      | `ip route show`, `ip route get <ip>`   |
+| Duplicate IP or ARP issues       | `ip neigh show`                        |
+| Wrong MTU / fragmentation        | `ip link show` (look at mtu)           |
+
+## Investigation Tips
+
+- `ip route get <destination>` is one of the most useful commands — it shows exactly how the kernel will route a packet.
+- Prefer `ip -br` for quick readable output.
+- In containers and network namespaces, remember that `ip` only sees the current namespace unless you use `ip netns`.
+- Changes made with `ip` are usually not persistent — permanent config lives in NetworkManager, netplan, systemd-networkd, or distribution-specific files.
+
+## Related Notes
+
+- [[TCP IP Troubleshooting Model]]
+- [[Routing]]
+- [[ARP and Neighbor Discovery]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
