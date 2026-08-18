@@ -1,55 +1,85 @@
-# Services DNS and Ingress
+# Services, DNS and Ingress
 
 ## Concept
-Kubernetes networking exposes workloads through Services and higher-level routing.
+
+Kubernetes provides several layers for exposing and discovering workloads:
+
+- **Service** – stable virtual IP + DNS name in front of a set of Pods
+- **Cluster DNS** (CoreDNS) – name resolution for Services and Pods
+- **Ingress** – HTTP/HTTPS routing from outside the cluster to Services
 
 ## Why it matters
-Separate endpoint availability from DNS and ingress/controller issues.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+Many “application is down” reports are actually:
+- Service has no healthy endpoints
+- DNS resolution failing inside the cluster
+- Ingress controller or rules misconfigured
+- Network policies blocking traffic
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+External Client
+    ↓
+Ingress Controller (optional)
+    ↓
+Service (ClusterIP / NodePort / LoadBalancer)
+    ↓
+Endpoints / EndpointSlices
+    ↓
+Pods
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Inside the cluster, Pods talk to each other via Service DNS names:
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+```
+my-service.my-namespace.svc.cluster.local
+```
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+## Key Commands
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+```bash
+# Services and endpoints
+kubectl get svc -A
+kubectl get endpoints -A
+kubectl describe svc <service> -n <ns>
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# DNS debugging
+kubectl get pods -n kube-system | grep coredns
+kubectl run -it --rm debug --image=busybox --restart=Never -- nslookup my-service.my-namespace
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Ingress
+kubectl get ingress -A
+kubectl describe ingress <name> -n <ns>
+
+# Test from inside the cluster
+kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- curl -v http://my-service.my-namespace
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Likely cause                              | First checks                     |
+|--------------------------------------|-------------------------------------------|----------------------------------|
+| Service has no endpoints             | Selector doesn’t match Pods / Pods not Ready | `kubectl get endpoints`, Pod labels & readiness |
+| DNS name doesn’t resolve             | CoreDNS issue or wrong name               | CoreDNS pods, nslookup from a Pod |
+| External traffic doesn’t reach app   | Ingress / LoadBalancer / firewall         | Ingress controller logs, Service type |
+| Intermittent connectivity            | Network policy, kube-proxy, CNI           | Network policies, node health    |
+
+## Investigation Tips
+
+- Always check **Endpoints** (or EndpointSlices) — a Service with zero endpoints will never work.
+- Readiness probes directly affect whether a Pod is added to endpoints.
+- Test DNS and connectivity *from another Pod* inside the cluster, not only from outside.
+- Ingress problems are often in the controller logs or in the Ingress object’s events.
+
+## Related Notes
+
+- [[Kubernetes Architecture]]
+- [[Pod Troubleshooting]]
+- [[TCP IP Troubleshooting Model]]
+- [[DNS Resolution]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
