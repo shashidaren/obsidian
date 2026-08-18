@@ -1,55 +1,64 @@
 # Inodes
 
 ## Concept
-Inodes store filesystem metadata. A filesystem can have free blocks but no free inodes.
+
+An **inode** is a filesystem data structure that stores metadata about a file or directory (permissions, owner, size, timestamps, pointers to data blocks, etc.).  
+The actual filename lives in the directory entry; the inode holds everything else.
+
+Every filesystem has a fixed number of inodes created at format time (or dynamically managed in some modern filesystems).
 
 ## Why it matters
-Check `df -i` whenever applications report 'No space left on device'.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+A filesystem can report “No space left on device” even when `df -h` shows free space, if it has run out of inodes.  
+This is especially common with millions of small files (mail queues, session files, container layers, monitoring metrics, etc.).
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Filesystem capacity has two limits:
+1. Data blocks  → shown by df -h
+2. Inodes       → shown by df -i
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+You can have free blocks but zero free inodes (or the reverse).
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Inode usage overview
+df -i
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Detailed view for one filesystem
+df -i /var
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Find directories containing huge numbers of files
+find /var -xdev -type d -exec sh -c 'echo $(find "$1" -maxdepth 1 -type f | wc -l) files in $1' _ {} \; 2>/dev/null | sort -nr | head -20
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Count inodes used under a path
+find /path -xdev -printf "%i\n" | sort -u | wc -l
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Likely cause                              | First checks                     |
+|--------------------------------------|-------------------------------------------|----------------------------------|
+| “No space left on device” but df -h OK | Inode exhaustion                          | `df -i`                          |
+| Cannot create new files/directories  | No free inodes                            | `df -i`, find large directories  |
+| Sudden inode exhaustion              | Application creating millions of small files | Check mail, sessions, tmp, containers |
+
+## Investigation Tips
+
+- Always run both `df -h` **and** `df -i` when investigating space issues.
+- Common culprits: PHP sessions, mail spools, Nginx/Apache cache, Docker overlay, monitoring agents, CI artifacts.
+- On XFS and some other filesystems inode allocation is more flexible, but you can still run out.
+
+## Related Notes
+
+- [[Disk Full Runbook]]
+- [[df and du Deep Dive]]
+- [[Filesystems and Mounts]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
