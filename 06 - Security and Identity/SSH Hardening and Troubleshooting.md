@@ -1,55 +1,100 @@
 # SSH Hardening and Troubleshooting
 
 ## Concept
-SSH involves daemon configuration, network reachability, cryptography, authentication and account policy.
+
+SSH (OpenSSH) provides encrypted remote access.  
+Problems usually fall into one of these layers:
+
+1. Network reachability
+2. sshd is running and listening
+3. Configuration / hardening rules
+4. Authentication (keys, passwords, MFA)
+5. Account / shell / SELinux issues
 
 ## Why it matters
-Always test configuration with `sshd -t` before reload.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+SSH is the primary access method for most Linux servers.  
+Misconfiguration can lock you out; weak configuration is a major security risk.
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Client → Network → sshd (listening) → Config checks → Authentication → Session
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Always test configuration before reloading:
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+```bash
+sshd -t
+```
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+## Key Commands
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+```bash
+# Is sshd running and listening?
+systemctl status sshd
+ss -tulpn | grep sshd
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Test config
+sshd -t
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Detailed client-side debugging
+ssh -vvv user@host
+
+# Server logs
+journalctl -u sshd -b
+journalctl -u ssh -b          # on some distributions
+
+# Effective config (minus comments)
+sshd -T | sort
+```
+
+### Common hardening settings (sshd_config)
+
+```
+PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+AllowUsers / AllowGroups
+MaxAuthTries 3
+LoginGraceTime 30
+X11Forwarding no
+AllowTcpForwarding no          # if not needed
+ClientAliveInterval 300
+ClientAliveCountMax 2
+```
+
+After changes:
+
+```bash
+sshd -t && systemctl reload sshd
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                          | First checks                              |
+|----------------------------------|-------------------------------------------|
+| Connection refused               | Is sshd running? Listening on expected port? |
+| Connection timed out             | Network / firewall / security groups      |
+| Permission denied (publickey)    | Key permissions, authorized_keys, sshd logs |
+| Permission denied (password)     | PasswordAuth setting, account lock, PAM   |
+| Works from some hosts only       | AllowUsers, firewall, TCP wrappers        |
+| Lockout after config change      | Console / cloud serial access needed      |
+
+## Investigation Tips
+
+- Use `ssh -vvv` from the client — it often shows exactly where the handshake fails.
+- On the server, always check the journal for sshd while reproducing the login.
+- Key file permissions matter: private key `600`, authorized_keys `600`, `.ssh` directory `700`.
+- Have a break-glass method (cloud serial console, another user, physical access) before hardening aggressively.
+
+## Related Notes
+
+- [[ss Deep Dive]]
+- [[TCP IP Troubleshooting Model]]
+- [[sudo]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
