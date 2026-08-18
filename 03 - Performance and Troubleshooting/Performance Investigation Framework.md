@@ -1,55 +1,105 @@
 # Performance Investigation Framework
 
-## Concept
-Investigate utilization, saturation and errors across CPU, memory, storage and network.
+**Purpose**: A repeatable method to diagnose performance problems without jumping to conclusions.
 
-## Why it matters
-Correlating several metrics prevents misleading conclusions from a single percentage.
+---
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+## Core Principle
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+Look at **Utilization**, **Saturation**, and **Errors** across the main resources:
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+| Resource   | Utilization              | Saturation                     | Errors                    |
+|------------|--------------------------|--------------------------------|---------------------------|
+| CPU        | %user, %system           | Load average, run queue        | —                         |
+| Memory     | Used / Available         | Swapping, OOM                  | Allocation failures       |
+| Disk       | Throughput, %util        | Await, queue length            | I/O errors                |
+| Network    | Bandwidth, pps           | Dropped packets, retransmits   | Errors, resets            |
+| Application| Request rate, latency    | Queue depth, thread pool       | 5xx, timeouts             |
 
-## Useful commands
+A high utilization number alone is rarely enough. Saturation and errors tell you whether the resource is actually the bottleneck.
+
+---
+
+## 1. Define the Problem Precisely
+
+- What is slow or failing? (login, API, batch job, whole host…)
+- When did it start?
+- Is it continuous or intermittent?
+- Who/what is affected?
+- What changed recently?
+
+---
+
+## 2. Quick Baseline (gather before changing anything)
+
 ```bash
 date
 uptime
-systemctl --failed
-journalctl -p err -b
+free -h
+df -hT
+df -i
+vmstat 1 5
+mpstat -P ALL 1 3
+iostat -xz 1 3
+ss -s
+ps aux --sort=-%cpu | head -10
+ps aux --sort=-%mem | head -10
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+---
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## 3. Work Through the Resources
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+### CPU
+- High %CPU + high load → CPU bound → [[High CPU Runbook]]
+- High load + low %CPU → usually I/O or waiting → check disk/network
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+### Memory
+- Low MemAvailable + swapping or OOM → [[Memory Pressure Runbook]]
+- High cache usage is usually normal
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+### Disk
+- High await / high %util → disk saturation
+- Check `iostat -xz`, `iotop`, and whether it is random or sequential I/O
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+### Network
+- Retransmits, drops, errors → [[TCP IP Troubleshooting Model]]
+- Use `ss`, `sar -n`, `tcpdump` as needed
+
+### Application
+- Look at its own metrics, logs, and thread/connection pools
+
+---
+
+## 4. Form and Test Hypotheses
+
+- Change one thing at a time.
+- Prefer gathering more data over restarting services early.
+- Compare with a known healthy host when possible.
+
+---
+
+## 5. Verify Recovery
+
+Confirm that:
+- The original symptom is gone
+- Resource saturation has dropped
+- Error rates and latency are back to normal
+- No new problems were introduced
+
+---
+
+## Related Runbooks & Notes
+
+- [[High CPU Runbook]]
+- [[Memory Pressure Runbook]]
+- [[Disk Full Runbook]]
+- [[CPU Scheduling and Load Average]]
+- [[Memory Management]]
+- [[Troubleshooting Methodology]]
+
+---
+
+## Personal Lessons Learned
+
+> 
