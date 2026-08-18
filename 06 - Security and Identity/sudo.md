@@ -1,55 +1,81 @@
 # sudo
 
 ## Concept
-sudo delegates privileged commands according to policy.
+
+`sudo` lets permitted users run commands as root (or another user) according to rules defined in `/etc/sudoers` and files under `/etc/sudoers.d/`.
 
 ## Why it matters
-Validate policy with `visudo`; overly broad rules become long-term security debt.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- Overly broad sudo rules are a long-term security risk.
+- Incorrect syntax can lock administrators out of privileged access.
+- Understanding how to safely edit and test sudo policy is essential.
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+User runs: sudo <command>
+    ↓
+sudo checks /etc/sudoers + /etc/sudoers.d/*
+    ↓
+If allowed → runs command as target user (usually root)
+If denied  → logs the attempt and refuses
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Key Commands
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+```bash
+# Edit sudoers safely (always use visudo)
+sudo visudo
+sudo visudo -f /etc/sudoers.d/custom
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+# Test a user’s permissions
+sudo -l -U <username>
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Check syntax without installing
+visudo -c
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# See what the current user can do
+sudo -l
+```
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+### Common rule examples
+
+```
+# Full access
+adminuser  ALL=(ALL) ALL
+
+# Specific commands only
+deploy ALL=(root) /usr/bin/systemctl restart nginx, /usr/bin/systemctl status nginx
+
+# No password for certain commands
+monitoring ALL=(root) NOPASSWD: /usr/bin/systemctl status *
+
+# Group based
+%sudo  ALL=(ALL:ALL) ALL
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Likely cause                              | First checks                     |
+|--------------------------------------|-------------------------------------------|----------------------------------|
+| user is not in the sudoers file      | Missing rule or wrong username/group      | `sudo -l -U user`, check sudoers |
+| sudo: command not found              | Restricted PATH or command not allowed    | Full path in sudoers rule        |
+| Changes have no effect               | Syntax error or wrong file                | `visudo -c`                      |
+| Locked out of sudo                   | Bad sudoers change                        | Root console / recovery mode     |
+
+## Investigation Tips
+
+- **Never** edit `/etc/sudoers` directly with a normal editor — always use `visudo` so syntax is checked.
+- Prefer drop-in files under `/etc/sudoers.d/` for custom rules.
+- Use full paths to commands in sudoers rules.
+- Log entries for denied sudo attempts usually appear in the secure/auth journal or `/var/log/secure` / `/var/log/auth.log`.
+
+## Related Notes
+
+- [[SSH Hardening and Troubleshooting]]
+- [[Users Groups and Permissions]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
