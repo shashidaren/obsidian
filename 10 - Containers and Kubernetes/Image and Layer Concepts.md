@@ -1,55 +1,73 @@
 # Image and Layer Concepts
 
 ## Concept
-Images are layered filesystem definitions; containers add writable runtime state.
+
+A container **image** is a packaged filesystem + metadata.  
+Images are built from **layers**. Each instruction in a Dockerfile typically creates a new layer.
+
+When a container runs, the runtime adds a thin **writable layer** on top of the image layers.
 
 ## Why it matters
-Keep persistent data in appropriate volumes or external services.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- Understanding layers helps with image size, caching, and build time
+- Data written inside a container is ephemeral unless stored on a volume
+- Image pull problems and layer corruption appear in Pod events and runtime logs
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+```
+Image
+├── Layer 1 (base OS)
+├── Layer 2 (packages)
+├── Layer 3 (application code)
+└── ...
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+Container = Image layers (read-only) + Writable layer (ephemeral)
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Volumes / bind mounts sit outside this layered filesystem and are the correct place for persistent data.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Image information
+docker images
+docker history <image>
+docker inspect <image>
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# In Kubernetes
+kubectl describe pod <pod> | grep -i image
+kubectl get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[*].image}{"\n"}{end}'
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Disk usage related to images (Docker)
+docker system df
+docker system df -v
+```
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Likely cause                              | First checks                     |
+|--------------------------------------|-------------------------------------------|----------------------------------|
+| ImagePullBackOff                     | Wrong name/tag, auth, network to registry | Pod events, image name, secrets  |
+| Very large images                    | Too many layers / unnecessary files       | `docker history`, .dockerignore  |
+| Data lost after container restart    | Wrote into the writable layer instead of a volume | Volume mounts in Pod/container |
+| Slow pulls                           | Large image or slow registry              | Image size, registry location    |
+
+## Investigation Tips
+
+- Prefer explicit tags over `latest` in production.
+- Use multi-stage builds and .dockerignore to keep images small.
+- In Kubernetes, image pull policy (`IfNotPresent`, `Always`, `Never`) affects behaviour on each node.
+- Image layers are cached on nodes — a failed or partial pull can sometimes leave the node in a bad state until cleaned.
+
+## Related Notes
+
+- [[Docker Operations]]
+- [[Container Internals]]
+- [[Pod Troubleshooting]]
+- [[Persistent Storage]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
