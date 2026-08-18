@@ -1,55 +1,118 @@
 # Pod Troubleshooting
 
-## Concept
-Inspect status, events, container logs, resource limits and probes.
+**Purpose**: Systematic approach to diagnosing Pod problems in Kubernetes.
 
-## Why it matters
-CrashLoopBackOff is a symptom; the application or environment still needs diagnosis.
+---
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+## 1. Quick Status
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
-
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
 ```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+kubectl get pods -A -o wide
+kubectl get pods -n <namespace>
+kubectl describe pod <pod> -n <namespace>
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Look at:
+- STATUS column (Pending, Running, CrashLoopBackOff, ImagePullBackOff, Error, Completed…)
+- READY column (e.g. 0/1, 1/2)
+- Events at the bottom of `describe`
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+---
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+## 2. Common Pod States & What They Mean
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+| State                | Meaning                                      | First actions                          |
+|----------------------|----------------------------------------------|----------------------------------------|
+| Pending              | Not scheduled yet                            | `describe` → Events (resources, taints, affinity) |
+| ContainerCreating    | Runtime is starting the container            | Usually transient; check if stuck      |
+| Running              | Containers started                           | Check READY and application health     |
+| CrashLoopBackOff     | Container keeps crashing                     | Logs + `describe`                      |
+| ImagePullBackOff     | Cannot pull image                            | Image name, registry auth, network     |
+| Error / Completed    | Container exited                             | Exit code + logs                       |
+| OOMKilled            | Container exceeded memory limit              | Limits + application memory usage      |
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+---
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+## 3. Investigation Steps
+
+### 3.1 Events and description
+
+```bash
+kubectl describe pod <pod> -n <ns>
+```
+
+Events section is often the fastest source of truth.
+
+### 3.2 Logs
+
+```bash
+kubectl logs <pod> -n <ns>
+kubectl logs <pod> -n <ns> -c <container>          # multi-container
+kubectl logs <pod> -n <ns> --previous              # previous crashed container
+kubectl logs <pod> -n <ns> -f                      # follow
+```
+
+### 3.3 Resource usage and limits
+
+```bash
+kubectl top pod <pod> -n <ns>
+kubectl describe pod <pod> -n <ns> | grep -A5 -E 'Limits|Requests'
+```
+
+### 3.4 Shell into the container (when running)
+
+```bash
+kubectl exec -it <pod> -n <ns> -- /bin/sh
+```
+
+---
+
+## 4. Decision Flow (simplified)
+
+```
+Pending?
+  → describe → look for FailedScheduling, insufficient CPU/memory, taints, affinity
+
+ImagePullBackOff?
+  → image name, tag, registry credentials, network to registry
+
+CrashLoopBackOff / Error?
+  → logs --previous, describe, check probes, config, permissions
+
+Running but not Ready?
+  → readiness probe failing, application not listening yet
+
+OOMKilled?
+  → memory limits too low or application leak
+```
+
+---
+
+## 5. Useful Extra Commands
+
+```bash
+# All events in a namespace
+kubectl get events -n <ns> --sort-by='.lastTimestamp'
+
+# Watch pods
+kubectl get pods -n <ns> -w
+
+# YAML of the running pod
+kubectl get pod <pod> -n <ns> -o yaml
+```
+
+---
+
+## Related Notes
+
+- [[Kubernetes Architecture]]
+- [[Resource Requests and Limits]]
+- [[Services DNS and Ingress]]
+- [[Container Internals]]
+- [[Troubleshooting Methodology]]
+
+---
+
+## Personal Lessons Learned
+
+> 
