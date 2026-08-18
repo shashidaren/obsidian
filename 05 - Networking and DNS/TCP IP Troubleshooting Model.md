@@ -1,55 +1,116 @@
-# TCP IP Troubleshooting Model
+# TCP/IP Troubleshooting Model
 
-## Concept
-Troubleshoot from local interface through address, route, gateway, remote reachability, DNS and application protocol.
+**Purpose**: A layered, systematic way to diagnose network connectivity problems.
 
-## Why it matters
-Do not assume DNS is the problem before proving basic connectivity.
+---
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+## Core Principle
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+Start from the bottom (local) and move up.  
+Do not jump to DNS or the application before proving the lower layers work.
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+7. Application     (curl, app logs, certificates)
+6. DNS             (name resolution)
+5. Transport       (TCP/UDP ports, firewalls)
+4. Routing         (can we reach the gateway and remote network?)
+3. Local stack     (IP address, interface state)
+2. Link / Physical (cable, interface up, ARP)
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+---
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## 1. Local Interface & Address
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+ip link show
+ip addr show
+ip route show
+```
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+Checks:
+- Is the interface UP?
+- Does it have the expected IP and prefix?
+- Is there a default route?
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+---
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+## 2. Gateway & Basic Reachability
+
+```bash
+ip route
+ping -c 3 <gateway>
+ping -c 3 <remote-ip>          # if ICMP allowed
+```
+
+---
+
+## 3. Listening Service (on the target)
+
+On the server:
+
+```bash
+ss -tulpn | grep <port>
+```
+
+Is anything actually listening?
+
+---
+
+## 4. Firewall / Security Groups
+
+- Local: `iptables -L -n -v`, `nft list ruleset`, `firewall-cmd --list-all`
+- Cloud: Security groups / Network ACLs
+- Path: intermediate firewalls
+
+---
+
+## 5. DNS (only after basic connectivity works)
+
+```bash
+getent hosts <hostname>
+dig +short <hostname>
+cat /etc/resolv.conf
+```
+
+Compare application behaviour with `getent` and `dig`.
+
+---
+
+## 6. Application Layer
+
+```bash
+curl -v https://target
+openssl s_client -connect host:443 -servername host
+```
+
+Look at certificates, TLS version, HTTP status codes, application logs.
+
+---
+
+## Quick Decision Tree
+
+| Symptom                        | First layer to check       |
+|--------------------------------|----------------------------|
+| Nothing works, even by IP      | Local interface & routing  |
+| Works by IP, fails by name     | DNS                        |
+| Connection refused             | Listening socket / firewall|
+| Connection timed out           | Routing, firewall, remote down |
+| TLS / certificate errors       | Application / cert layer   |
+
+---
+
+## Related Notes
+
+- [[ss Deep Dive]]
+- [[DNS Resolution]]
+- [[ip Command Deep Dive]]
+- [[curl Deep Dive]]
+- [[TLS Troubleshooting]]
+- [[Troubleshooting Methodology]]
+
+---
+
+## Personal Lessons Learned
+
+> 
