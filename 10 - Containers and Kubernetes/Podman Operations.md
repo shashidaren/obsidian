@@ -1,55 +1,80 @@
 # Podman Operations
 
 ## Concept
-Podman supports daemonless and rootless container workflows.
+
+Podman is a daemonless container engine. It can run containers as root or as a normal user (**rootless**).  
+Command-line usage is deliberately similar to Docker in many cases.
 
 ## Why it matters
-User namespaces and rootless networking can change permissions and connectivity expectations.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- Many modern Linux distributions favour Podman over Docker.
+- Rootless mode changes networking, storage paths, and permission behaviour.
+- Useful for local development and for environments that want to avoid a root daemon.
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Docker-style CLI
+    ↓
+Podman (no central daemon)
+    ↓
+containers / pods / images (per user or system)
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Rootless containers run inside a user namespace, so UIDs/GIDs and some network features behave differently from rootful containers.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Basic lifecycle (very similar to Docker)
+podman ps
+podman ps -a
+podman images
+podman run -it --rm <image> /bin/sh
+podman logs <container>
+podman exec -it <container> /bin/sh
+podman stop / start / rm <container>
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# System / rootless info
+podman info
+podman system df
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Generate systemd units (useful for services)
+podman generate systemd --name <container> --files
+```
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+## Rootless vs Rootful differences
+
+| Area            | Rootful                         | Rootless                              |
+|-----------------|---------------------------------|---------------------------------------|
+| Privilege       | Runs as root                    | Runs as normal user                   |
+| Network         | Full host network capability    | Often uses slirp4netns / pasta        |
+| Storage path    | System locations                | Under user’s home (`~/.local/share/containers`) |
+| Port binding    | Any port                        | Ports ≥ 1024 without extra config     |
+| Security        | Higher risk if compromised      | Better isolation by default           |
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Likely cause                              | First checks                     |
+|--------------------------------------|-------------------------------------------|----------------------------------|
+| Permission denied on volumes         | UID mapping in rootless mode              | `podman unshare cat /proc/self/uid_map` |
+| Cannot bind low ports                | Rootless restriction                      | Use higher ports or rootful      |
+| Networking from container fails      | Rootless network stack                    | `podman info`, try `--network host` for testing |
+| Storage / disk issues                | User container storage full               | `podman system df`               |
+
+## Investigation Tips
+
+- `podman` and `docker` commands are often interchangeable for basic use, but behaviour diverges with rootless, pods, and systemd integration.
+- For services that should survive logout, use `podman generate systemd` or quadlet.
+- When debugging rootless problems, check the user namespace mappings and the storage location under the user’s home.
+
+## Related Notes
+
+- [[Docker Operations]]
+- [[Container Internals]]
+- [[Namespaces and cgroups]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
