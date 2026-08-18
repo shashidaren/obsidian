@@ -1,55 +1,87 @@
 # ss Deep Dive
 
 ## Concept
-`ss` inspects sockets, listening services and connection states.
+
+`ss` (socket statistics) is the modern replacement for `netstat`. It shows TCP/UDP sockets, listening ports, connection states, and more, with better performance and more detail.
 
 ## Why it matters
-Use it to distinguish 'service not listening' from firewall or network problems.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+When a service is “not reachable”, the first question is usually:
+- Is anything listening on the expected port?
+- Is the connection established, stuck in SYN, TIME_WAIT, etc.?
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+`ss` answers these quickly.
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+## Mental Model
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+ss shows the kernel’s view of sockets:
+- Listening sockets (servers)
+- Established connections
+- Connection states (SYN-SENT, ESTAB, TIME-WAIT, CLOSE-WAIT…)
+- Queues (send/recv)
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Key Commands
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+```bash
+# All TCP sockets with process info
+ss -tulpn
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+# Listening sockets only
+ss -tuln
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Established connections
+ss -tp state established
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Summary
+ss -s
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Connections to/from a specific port
+ss -tp sport = :80
+ss -tp dport = :443
+
+# Show timer information (useful for stuck connections)
+ss -tn state time-wait
+ss -tn state close-wait
+```
+
+### Useful state filters
+
+```bash
+ss -tp state syn-sent
+ss -tp state syn-recv
+ss -tp state fin-wait-1
+ss -tp state fin-wait-2
+ss -tp state time-wait
+ss -tp state close-wait
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                          | What ss often shows                  | Meaning                              |
+|----------------------------------|--------------------------------------|--------------------------------------|
+| Service unreachable              | No listening socket on expected port | Service not started or wrong port    |
+| Connections hang                 | Many SYN-SENT                        | Outbound blocked or remote down      |
+| Client connections pile up       | Many CLOSE-WAIT or FIN-WAIT          | Application not closing properly     |
+| Port already in use              | Listening socket already present     | Conflict / old process still running |
+| High connection count            | Large number of ESTAB or TIME-WAIT   | Possible leak or traffic spike       |
+
+## Investigation Tips
+
+- Always add `-p` when you need to know which process owns the socket (requires root).
+- `CLOSE-WAIT` usually means the local application is not closing the socket.
+- `TIME-WAIT` is normal after a connection closes; large numbers can still cause pressure.
+- Combine with `lsof -i` or `lsof -p <PID>` when you need more detail on a specific process.
+
+## Related Notes
+
+- [[TCP IP Troubleshooting Model]]
+- [[File Descriptors]]
+- [[lsof Deep Dive]]
+- [[curl Deep Dive]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
