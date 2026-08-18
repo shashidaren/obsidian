@@ -1,55 +1,74 @@
 # Memory Management
 
 ## Concept
-Linux uses RAM for anonymous memory and page cache. Cached memory can be reclaimed, so low 'free' memory alone is not proof of pressure.
+Linux treats RAM as a shared resource used for:
+- **Anonymous memory** (process heaps, stacks, etc.)
+- **Page cache** (file contents)
+- **Kernel structures** (slab, dentries, inodes, etc.)
+
+The kernel aggressively uses free memory for caching. **Low “free” memory is normal** and does not by itself mean the system is under pressure.
 
 ## Why it matters
-Focus on available memory, reclaim activity, swap, latency and OOM events.
+What actually matters for performance and stability is:
+- How much memory is still **available** (can be reclaimed quickly)
+- Whether the system is **swapping**
+- Whether applications are experiencing allocation latency or OOM events
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+## Mental Model
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
-
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Total RAM
+├── Used by processes (RSS / anonymous)
+├── Page cache + Buffers          ← can usually be reclaimed
+├── Slab / kernel                 ← sometimes reclaimable
+└── Truly free
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+**MemAvailable** (from `/proc/meminfo` or `free -h`) is the best single number to watch. It estimates how much memory is available for new allocations without swapping.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# High-level view
+free -h
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Detailed breakdown
+cat /proc/meminfo
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Top memory consumers (RSS)
+ps -eo pid,user,rss,cmd --sort=-rss | head -20
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Human-readable
+ps -eo pid,user,rss,cmd --sort=-rss | awk 'NR==1{print; next} {printf "%s\t%s\t%.1f MB\t%s\n", $1,$2,$3/1024,$4}' | head -15
+
+# Watch memory pressure over time
+vmstat 1
+watch -n1 free -h
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                        | Likely cause                          | First checks                     |
+|--------------------------------|---------------------------------------|----------------------------------|
+| High memory usage, system slow | True pressure or heavy swapping       | `free -h`, `vmstat`, OOM logs    |
+| One process growing steadily   | Memory leak                           | `ps` over time, application logs |
+| OOM killer triggered           | Allocation failed under pressure      | `dmesg`, `journalctl -k`         |
+| High cache, low free           | Normal behaviour                      | Check MemAvailable, not free     |
+
+## Investigation Tips
+
+- Always look at **MemAvailable**, not just “free”.
+- Correlate with swap activity (`si`/`so` in `vmstat`).
+- Check for OOM events even if the system is currently stable.
+- For containers / cgroups, also look at memory.current and memory.max.
+
+## Related Notes
+
+- [[Swap and OOM Killer]]
+- [[Memory Pressure Runbook]]
+- [[vmstat Deep Dive]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
