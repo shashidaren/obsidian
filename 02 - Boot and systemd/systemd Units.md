@@ -1,55 +1,105 @@
 # systemd Units
 
 ## Concept
-Units describe services, sockets, mounts, timers, targets and dependencies.
+
+A **unit** is the basic object systemd manages. Common types include:
+
+| Type       | Extension   | Purpose                              |
+|------------|-------------|--------------------------------------|
+| Service    | `.service`  | Long-running processes               |
+| Socket     | `.socket`   | Socket activation                    |
+| Timer      | `.timer`    | Time-based activation (cron replacement) |
+| Target     | `.target`   | Grouping / synchronization points    |
+| Mount      | `.mount`    | Filesystem mounts                    |
+| Path       | `.path`     | Path-based activation                |
 
 ## Why it matters
-Dependencies, ordering and failure states explain why a service may fail even when its own binary is valid.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+Understanding unit types, dependencies, and ordering is key to diagnosing why a service fails to start or starts in the wrong order.
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Unit file (and drop-ins)
+    ↓
+systemd reads & activates
+    ↓
+Dependencies (Requires, Wants, After, Before)
+    ↓
+Service runs (or fails)
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Drop-in files (`/etc/systemd/system/<unit>.d/*.conf`) let you override parts of a unit without editing the original file.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# List unit files and their state
+systemctl list-unit-files --type=service
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Show effective unit content (including drop-ins)
+systemctl cat <unit>
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Show all properties
+systemctl show <unit>
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Dependencies
+systemctl list-dependencies <unit>
+systemctl list-dependencies --reverse <unit>
+
+# Edit a drop-in safely
+systemctl edit <unit>                # creates override.conf
+systemctl edit --full <unit>         # full copy
+
+# After changing unit files
+systemctl daemon-reload
+```
+
+## Important Directives (service units)
+
+```
+[Unit]
+Description=
+After= / Before=
+Requires= / Wants=
+
+[Service]
+Type=simple|forking|oneshot|notify
+ExecStart=
+ExecReload=
+Restart=on-failure|always
+Environment=
+EnvironmentFile=
+LimitNOFILE=
+
+[Install]
+WantedBy=multi-user.target
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                          | What to look at                          |
+|----------------------------------|------------------------------------------|
+| Unit fails to start              | `systemctl status`, `journalctl -u`      |
+| Changes have no effect           | Did you run `daemon-reload`? Drop-ins?   |
+| Starts too early / too late      | `After=` / `Before=` dependencies        |
+| Fails because of missing dependency | `Requires=` vs `Wants=`               |
+| Environment variables missing    | `Environment=` / `EnvironmentFile=`      |
+
+## Investigation Tips
+
+- Always check `systemctl cat <unit>` to see the real effective configuration.
+- Prefer drop-ins (`systemctl edit`) over modifying vendor unit files.
+- `Type=notify` and `Type=forking` behave very differently from `Type=simple` — wrong type is a common cause of startup issues.
+- Use `systemd-analyze blame` and `systemd-analyze critical-chain` when investigating slow boots.
+
+## Related Notes
+
+- [[systemctl Deep Dive]]
+- [[journalctl Deep Dive]]
+- [[systemd Timers]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
