@@ -1,55 +1,88 @@
 # Container Internals
 
 ## Concept
-Containers package processes while relying on kernel isolation and cgroups rather than emulating a full VM.
+
+A container is **not** a lightweight VM.  
+It is a regular Linux process (or group of processes) isolated using kernel features:
+
+- **Namespaces** – isolate what the process can see (PID, network, mount, UTS, IPC, user…)
+- **cgroups** – limit and account for resources (CPU, memory, I/O…)
+- **Union / overlay filesystems** – give the appearance of a private root filesystem
 
 ## Why it matters
-Understand namespaces, layers, mounts and cgroups to troubleshoot correctly.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+Understanding the underlying mechanisms helps when:
+- Debugging “why can this container see X?”
+- Investigating resource limits and OOM kills
+- Working with network or storage problems inside containers
+- Moving between Docker, containerd, Podman, and Kubernetes
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Host Kernel
+├── Namespaces (isolation of view)
+├── cgroups (resource limits)
+└── Process(es) with a private rootfs (overlay)
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+From the inside, a container looks like its own small system.  
+From the host, it is just processes with special settings.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Concepts
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+| Feature        | Purpose                                      |
+|----------------|----------------------------------------------|
+| PID namespace  | Isolated process tree                        |
+| Network namespace | Isolated network stack (interfaces, routes) |
+| Mount namespace | Private filesystem mount table               |
+| User namespace  | Map container UIDs to different host UIDs    |
+| cgroups        | CPU / memory / I/O limits and accounting     |
+| OverlayFS      | Layered filesystem for images                |
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+## Useful Host Commands
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+```bash
+# See namespaces of a process
+lsns
+ls -l /proc/<PID>/ns
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# cgroup information
+cat /proc/<PID>/cgroup
+
+# What the container’s root looks like on the host (Docker example)
+docker inspect <container> | grep -i upperdir
+
+# Processes inside a container from the host
+docker top <container>
+# or
+ps aux | grep <container-process>
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Related internal concept           |
+|--------------------------------------|------------------------------------|
+| Process sees wrong network           | Network namespace                  |
+| Cannot write to expected paths       | Mount namespace / volumes / permissions |
+| OOMKilled                            | cgroup memory limit                |
+| Permission denied on files           | User namespace + file ownership    |
+| “No space left” inside container     | Overlay / writable layer full      |
+
+## Investigation Tips
+
+- When a container has network problems, check whether it is using the host network or its own network namespace.
+- Resource limits defined in Kubernetes or Docker end up as cgroup settings on the host.
+- Overlay filesystem issues can look like normal disk-full problems but are limited to the container’s writable layer.
+
+## Related Notes
+
+- [[Namespaces and cgroups]]
+- [[Docker Operations]]
+- [[Kubernetes Architecture]]
+- [[Resource Requests and Limits]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
