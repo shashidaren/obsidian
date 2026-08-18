@@ -1,55 +1,82 @@
 # journald and Persistent Storage
 
 ## Concept
-journald can retain logs in volatile or persistent storage.
+
+`journald` can store logs in two ways:
+
+- **Volatile** – in memory / `/run/log/journal` (lost on reboot)
+- **Persistent** – on disk under `/var/log/journal`
+
+Persistence is controlled by configuration in `/etc/systemd/journald.conf` and the presence of the directory.
 
 ## Why it matters
-Retention and disk limits must match incident investigation requirements.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- Without persistent storage you lose logs across reboots (bad for post-incident analysis).
+- With persistent storage you must manage disk usage, or the journal can fill the disk.
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Storage=auto     → persistent if /var/log/journal exists, otherwise volatile
+Storage=persistent → always try to use /var/log/journal
+Storage=volatile   → only /run/log/journal
+Storage=none       → disable journal storage
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Key Commands
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+```bash
+# Current disk usage of the journal
+journalctl --disk-usage
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+# Is it persistent?
+ls /var/log/journal
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Configuration
+cat /etc/systemd/journald.conf | grep -v '^#' | grep -v '^$'
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Vacuum (clean old logs)
+journalctl --vacuum-size=500M
+journalctl --vacuum-time=14d
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Restart after config change
+systemctl restart systemd-journald
+```
+
+### Important journald.conf settings
+
+```
+[Journal]
+Storage=persistent
+SystemMaxUse=1G
+SystemKeepFree=2G
+MaxRetentionSec=1month
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Likely cause                              | First checks                     |
+|--------------------------------------|-------------------------------------------|----------------------------------|
+| Logs disappear after reboot          | Volatile storage only                     | `ls /var/log/journal`, Storage=  |
+| /var filling up                      | Journal growing without limits            | `journalctl --disk-usage`, SystemMaxUse |
+| journalctl shows very little history | Aggressive vacuum or small retention      | Config + vacuum settings         |
+| Permission issues writing journal    | Directory ownership / SELinux             | Permissions on /var/log/journal  |
+
+## Investigation Tips
+
+- Creating `/var/log/journal` and restarting journald is the usual way to enable persistence when Storage=auto.
+- Set explicit size limits (`SystemMaxUse`) on any production system with persistent journals.
+- `journalctl --disk-usage` should be part of regular disk checks.
+- Vacuum commands are safe ways to reclaim space without deleting the entire journal.
+
+## Related Notes
+
+- [[journalctl Deep Dive]]
+- [[Logging Architecture]]
+- [[Disk Full Runbook]]
+- [[logrotate]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
