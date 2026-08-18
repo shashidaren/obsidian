@@ -1,55 +1,74 @@
 # CPU Scheduling and Load Average
 
 ## Concept
-The scheduler decides which runnable tasks receive CPU time. Load average counts runnable work and tasks in uninterruptible sleep, so it is not equivalent to CPU percentage.
+
+The Linux scheduler decides which runnable tasks get CPU time.  
+**Load average** is the average number of tasks that are either:
+- Runnable (waiting for CPU), or
+- In uninterruptible sleep (usually waiting for I/O)
+
+over the last 1, 5 and 15 minutes.
+
+It is **not** the same as CPU utilization percentage.
 
 ## Why it matters
-High load with low CPU utilization often points toward I/O or blocked tasks rather than a CPU shortage.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+High load average with low CPU % often means the system is stuck on I/O (disk, NFS, network), not that you need more CPU cores.  
+Misreading load average is one of the most common troubleshooting mistakes.
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Load Average ≈ (tasks waiting for CPU) + (tasks in uninterruptible I/O wait)
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+- Load of 1.00 on a single-core system = fully busy
+- Load of 4.00 on a 4-core system = fully busy
+- Load significantly higher than number of CPUs = saturation / queuing
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Classic view
+uptime
+cat /proc/loadavg
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Better real-time view
+htop          # look at load and per-CPU bars
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Breakdown of what is using CPU
+mpstat -P ALL 1 5
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# See runnable vs blocked
+vmstat 1 5
+# r = runnable, b = blocked (uninterruptible)
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Likely meaning                        | First checks                  |
+|--------------------------------------|---------------------------------------|-------------------------------|
+| High load + high %CPU                | True CPU saturation                   | `top`, `mpstat`, process list |
+| High load + low %CPU + high %wa      | I/O wait (disk / NFS / network)       | `iostat`, `vmstat`, `iotop`   |
+| High load + many processes in D state| Processes stuck in uninterruptible sleep | `ps aux | awk '$8 ~ /D/'`   |
+| Load rising slowly over hours/days   | Memory pressure → swapping or leak    | `free`, `vmstat`              |
+
+## Investigation Tips
+
+- Always compare load average against the number of CPUs (`nproc`).
+- Use `vmstat` or `mpstat` to separate CPU time from I/O wait.
+- Processes in **D** state (uninterruptible sleep) contribute to load but use almost no CPU.
+- In containers/VMs also check steal time (`%st`).
+
+## Related Notes
+
+- [[High CPU Runbook]]
+- [[High Load Low CPU]]
+- [[Processes and Threads]]
+- [[vmstat Deep Dive]]
+- [[Performance Investigation Framework]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
