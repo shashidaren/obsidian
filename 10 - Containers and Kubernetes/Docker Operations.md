@@ -1,55 +1,86 @@
 # Docker Operations
 
 ## Concept
-Docker manages images, containers, networks and volumes.
+
+Docker is a platform for building, shipping, and running containers.  
+Even in Kubernetes environments, understanding Docker (or the underlying runtime) is still valuable for image work, local debugging, and legacy systems.
 
 ## Why it matters
-Container recreation can destroy evidence or ephemeral state; inspect before removing.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+Common operational tasks:
+- Inspecting running containers
+- Viewing logs
+- Debugging image and layer issues
+- Cleaning up disk space used by images/containers/volumes
+- Understanding resource usage
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
-
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Image (read-only layers)
+    ↓ docker run / create
+Container (writable layer + namespaces + cgroups)
+    ↓
+Process(es) running inside the container
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Key Commands
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+```bash
+# Running containers
+docker ps
+docker ps -a                    # include stopped
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+# Logs
+docker logs <container>
+docker logs -f --tail 100 <container>
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Inspect
+docker inspect <container>
+docker inspect <image>
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Execute into a container
+docker exec -it <container> /bin/sh
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Resource usage
+docker stats
+
+# Images
+docker images
+docker pull <image>
+docker rmi <image>
+
+# Cleanup (careful in production)
+docker system df
+docker system prune
+docker system prune -a --volumes
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                          | First checks                              |
+|----------------------------------|-------------------------------------------|
+| Container exits immediately      | `docker logs`, `docker inspect` (ExitCode) |
+| Cannot pull image                | Network, registry auth, image name        |
+| Disk full on Docker host         | `docker system df`, prune, volumes        |
+| Port already allocated           | `docker ps`, host port conflicts          |
+| Permission / volume issues       | Mounts, user namespaces, SELinux/AppArmor |
+
+## Investigation Tips
+
+- Always look at logs before removing a failed container — evidence disappears when the container is removed.
+- `docker system df` is the starting point for disk usage problems related to Docker.
+- Prefer `docker inspect` over guessing configuration.
+- On modern Kubernetes nodes the runtime is usually containerd; Docker commands may not be available or may talk to a different daemon.
+
+## Related Notes
+
+- [[Container Internals]]
+- [[Image and Layer Concepts]]
+- [[Pod Troubleshooting]]
+- [[Disk Full Runbook]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
