@@ -1,0 +1,76 @@
+name: Deploy Quartz site to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout vault
+        uses: actions/checkout@v4
+        with:
+          path: vault
+          fetch-depth: 0
+
+      - name: Checkout Quartz
+        uses: actions/checkout@v4
+        with:
+          repository: jackyzha0/quartz
+          ref: v4
+          path: quartz
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare content
+        run: |
+          cd quartz
+          rm -rf content
+          mkdir -p content
+          # Copy notes, exclude Obsidian config and git
+          rsync -a --exclude='.obsidian' --exclude='.git' --exclude='.github' --exclude='node_modules' ../vault/ content/
+          # Ensure there is a homepage
+          if [ ! -f content/index.md ]; then
+            if [ -f "content/00 - Start Here/Home.md" ]; then
+              cp "content/00 - Start Here/Home.md" content/index.md
+            else
+              echo -e "---\ntitle: Linux Sysadmin Notes\n---\n\n# Linux Sysadmin Notes\n\nPractical reference notes." > content/index.md
+            fi
+          fi
+
+      - name: Install and build Quartz
+        working-directory: quartz
+        run: |
+          npm ci
+          npx quartz build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: quartz/public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
