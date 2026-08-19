@@ -1,0 +1,38 @@
+@use "./base.scss";
+
+// Technical knowledge-base tweaks
+
+// Slightly tighter code blocks, better on mobile
+pre > code {
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+// Clearer headings
+h1 {
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  margin-top: 1.75rem;
+  border-bottom: 1px solid var(--lightgray);
+  padding-bottom: 0.35rem;
+}
+
+// Tables — important for runbook-style notes
+table {
+  font-size: 0.92rem;
+}
+
+// Callouts / blockquotes a bit more visible
+blockquote {
+  border-left-width: 4px;
+}
+
+// Mobile: a bit more comfortable reading width
+@media (max-width: 800px) {
+  .center {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
