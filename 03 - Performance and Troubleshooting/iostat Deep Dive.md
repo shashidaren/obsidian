@@ -1,55 +1,78 @@
 # iostat Deep Dive
 
 ## Concept
-`iostat` reports device I/O activity, throughput and latency-related indicators.
+
+`iostat` (from the sysstat package) reports CPU and device I/O statistics: throughput, utilisation, queue lengths, and latency-related metrics. It is the primary tool for deciding whether storage is the bottleneck.
 
 ## Why it matters
-High utilization alone is not always bad; interpret it with queueing, latency and workload.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- High disk utilisation does not automatically mean “disk is too slow” — you need queue depth and service time
+- Distinguishes read vs write pressure and which device is hot
+- Essential companion to `vmstat` when `%wa` or blocked processes are elevated
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+```
+iostat shows, per device:
+- tps          = transfers per second
+- kB_read/s, kB_wrtn/s  = throughput
+- %util        = percentage of time the device was busy
+- await        = average wait time (queue + service) in ms
+- aqu-sz       = average queue length
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+High %util + high await + rising aqu-sz = storage saturation
+High %util but low await = device is busy but keeping up
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+## Key Commands
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+```bash
+# Basic: CPU + devices, 1-second interval
+iostat -xz 1
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+# Extended stats, human-readable, only active devices
+iostat -dxz 1 5
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# With timestamps
+iostat -t -xz 1 10
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Specific devices only
+iostat -xz sda nvme0n1 1 5
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Older-style output (still useful)
+iostat -d -k 1 5          # KB/s
+```
+
+`-x` (extended) and `-z` (omit zero-activity devices) are almost always what you want.
+
+## Common Failure Modes & Symptoms
+
+| Symptom in iostat                     | Interpretation                         | Next actions                          |
+|---------------------------------------|----------------------------------------|---------------------------------------|
+| `%util` near 100%, high `await`       | Device saturated                       | Identify heavy processes (iotop, pidstat -d), check RAID/FS |
+| High `await`, modest `%util`          | Occasional slow I/Os or queueing elsewhere | Check underlying storage, multipath, network (NFS) |
+| High write throughput, rising `aqu-sz`| Write storm / fsync pressure           | Application logs, journal, database   |
+| One device hot, others idle           | Unbalanced workload or single-disk bottleneck | LVM/RAID layout, mount options        |
+| NFS mount shows high latency          | Network or remote server issue         | See [[NFS Troubleshooting]]           |
+
+## Investigation Tips
+
+- Always run with an interval (`iostat 1`) — the first report is since boot and can be misleading.
+- `%util` is a useful signal but not a perfect measure of saturation on modern multi-queue devices; watch `await` and `aqu-sz` together.
+- For NVMe and multi-queue devices, high concurrency can keep `%util` high while latency stays acceptable.
+- Pair with `iotop` or `pidstat -d 1` to find which processes are generating the I/O.
+- On virtual machines, the “device” may be a virtual disk whose real latency is determined by the hypervisor and shared storage.
+
+## Related Notes
+
+- [[vmstat Deep Dive]]
+- [[Disk I/O and Latency]]
+- [[Disk Full Runbook]]
+- [[pidstat Deep Dive]]
+- [[NFS Troubleshooting]]
+- [[Performance Investigation Framework]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 

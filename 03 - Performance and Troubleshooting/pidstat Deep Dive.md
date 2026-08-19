@@ -1,55 +1,84 @@
 # pidstat Deep Dive
 
 ## Concept
-`pidstat` attributes CPU, memory, context switching and I/O activity to tasks.
+
+`pidstat` (also from sysstat) attributes CPU, memory, I/O, and context-switch activity to individual processes or threads. It bridges the gap between system-wide symptoms (`top`, `vmstat`, `iostat`) and the responsible tasks.
 
 ## Why it matters
-It bridges the gap between system-wide symptoms and responsible processes.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- `top` shows current consumers; `pidstat` can show rates over time and per-thread detail
+- Excellent for finding which process is generating disk I/O or causing high context switches
+- Works well in scripts and for capturing short-lived or intermittent behaviour
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+```
+pidstat = per-process / per-thread counters
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+- CPU: user, system, guest, wait
+- Memory: RSS, VSZ, major/minor faults
+- I/O: kB_rd/s, kB_wr/s, cancelled writes
+- Context switches: voluntary vs non-voluntary
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+It samples periodically, so you see rates rather than only instantaneous percentages.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# CPU activity for all processes, 1-second interval
+pidstat 1
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# CPU + show command name, only active processes
+pidstat -l 1 5
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Per-thread view of a specific process
+pidstat -t -p <PID> 1 5
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Disk I/O per process
+pidstat -d 1 5
+
+# Memory and page faults
+pidstat -r 1 5
+
+# Context switches
+pidstat -w 1 5
+
+# Everything for one PID
+pidstat -urd -p <PID> 1 5
+
+# All processes that did something (non-zero)
+pidstat -l 1 5 | grep -v " 0.00 "
+```
+
+## Common Failure Modes & Symptoms
+
+| Goal                              | Useful pidstat flags              | What to look for                     |
+|-----------------------------------|-----------------------------------|--------------------------------------|
+| Who is burning CPU?               | `pidstat -l 1`                    | High %usr or %system                 |
+| Which process is doing heavy I/O? | `pidstat -d 1`                    | High kB_rd/s or kB_wr/s              |
+| Memory leak / heavy faulting      | `pidstat -r 1`                    | Rising RSS, high majflt/s            |
+| Lock or scheduling issues         | `pidstat -w 1`                    | High cswch/s or nvcswch/s            |
+| Multi-threaded runaway            | `pidstat -t -p <PID> 1`           | One thread dominating                |
+
+## Investigation Tips
+
+- Start with system-wide tools (`top`/`vmstat`/`iostat`), then use `pidstat` to attribute the pressure to processes.
+- `-d` (I/O) is especially valuable when `iostat` shows a busy device but you don’t yet know the culprit.
+- For short-lived processes, a longer sampling window or `pidstat` in a loop helps; some processes appear and disappear between samples.
+- On busy systems the output is noisy — pipe through `grep` or use `-p` to focus.
+- Remember that I/O statistics require the process to be doing I/O through the page cache / block layer; some direct-I/O or mmap patterns show up differently.
+
+## Related Notes
+
+- [[top Deep Dive]]
+- [[ps Deep Dive]]
+- [[iostat Deep Dive]]
+- [[vmstat Deep Dive]]
+- [[High CPU Runbook]]
+- [[Performance Investigation Framework]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 

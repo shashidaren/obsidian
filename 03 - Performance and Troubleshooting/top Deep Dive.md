@@ -1,55 +1,94 @@
 # top Deep Dive
 
 ## Concept
-`top` provides a live view of tasks and resource use.
+
+`top` (and its improved cousins `htop`/`btop`) gives a live, interactive view of processes, CPU, memory, and load. It is the first tool most admins reach for when a host “feels slow”.
 
 ## Why it matters
-Use it to identify consumers, but confirm short-lived or system-wide patterns with other tools.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- Instant visibility into who is consuming CPU and memory right now
+- Distinguishes user vs system vs iowait vs steal time
+- Shows load average, uptime, and task counts in one screen
+- Interactive sorting and filtering make it fast for triage
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+A single `top` snapshot is useful; watching it for 30–60 seconds is far more useful.
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+## Mental Model
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+top = live kernel process table + resource counters
+
+Key lines at the top:
+- load average (1/5/15 min) → demand for runnable work
+- Tasks / Cpu(s) line → where time is spent
+- Mem / Swap → pressure indicators
+
+Process list = current consumers of CPU/memory
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+`%CPU` is per-core (can exceed 100% on multi-core). Load average is system-wide demand.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Classic top
+top
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Better defaults: full command line, sort by CPU
+top -c -o %CPU
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Batch mode (good for scripts / logging)
+top -b -n 1 -o %CPU | head -30
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Focus on one process and its threads
+top -H -p <PID>
+
+# Update every 1 second, show only active processes
+top -d 1 -i
+
+# Useful interactive keys while top is running:
+#   P  → sort by CPU
+#   M  → sort by memory
+#   T  → sort by time
+#   1  → toggle per-CPU view
+#   H  → toggle threads
+#   c  → toggle full command line
+#   k  → kill a process (use carefully)
+#   q  → quit
+```
+
+Prefer `htop` or `btop` when available — colour, easier navigation, tree view, and better defaults.
+
+## Common Failure Modes & Symptoms
+
+| What you see in top              | Likely meaning                          | Next step                          |
+|----------------------------------|-----------------------------------------|------------------------------------|
+| One process at 100%+             | Runaway / busy loop / heavy worker      | Identify PID, check threads, logs  |
+| Many processes sharing high CPU  | Traffic spike, shared library, or fan-out | Look at parent / service           |
+| High `%wa` (iowait)              | Disk (or NFS) is the bottleneck         | Switch to iostat / vmstat          |
+| High `%st` (steal)               | Hypervisor contention (VM)              | Check host / other VMs             |
+| High load, low %CPU              | Waiting on I/O, locks, or network       | See [[High Load Low CPU]]          |
+| Memory climbing, swap rising     | Memory pressure / leak                  | See Memory Pressure Runbook        |
+
+## Investigation Tips
+
+- Always watch for at least 20–30 seconds. Spikes are normal; sustained high usage is not.
+- Press `1` to see per-CPU breakdown — helps spot single-core saturation.
+- Use `-H` (threads) when a multi-threaded process is high; one bad thread can hide in the process total.
+- Compare `%CPU` with load average. High load + low CPU usually means blocked tasks (I/O, locks).
+- `top` samples; short-lived processes can be missed. Use `pidstat` or `perf` for finer detail.
+- On containers/Kubernetes, remember the view is from the host (or the container’s cgroup limits).
+
+## Related Notes
+
+- [[High CPU Runbook]]
+- [[ps Deep Dive]]
+- [[pidstat Deep Dive]]
+- [[vmstat Deep Dive]]
+- [[CPU Scheduling and Load Average]]
+- [[Performance Investigation Framework]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
