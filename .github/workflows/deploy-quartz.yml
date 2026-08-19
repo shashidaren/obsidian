@@ -37,20 +37,39 @@ jobs:
         with:
           node-version: 22
 
-      - name: Prepare content
+      - name: Prepare content and theme
         run: |
           cd quartz
           rm -rf content
           mkdir -p content
-          # Copy notes, exclude Obsidian config and git
-          rsync -a --exclude='.obsidian' --exclude='.git' --exclude='.github' --exclude='node_modules' ../vault/ content/
-          # Ensure there is a homepage
+
+          # Copy notes (exclude Obsidian, git, config, templates)
+          rsync -a \
+            --exclude='.obsidian' \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='node_modules' \
+            --exclude='quartz-config' \
+            --exclude='99 - Templates' \
+            ../vault/ content/
+
+          # Homepage
           if [ ! -f content/index.md ]; then
             if [ -f "content/00 - Start Here/Home.md" ]; then
               cp "content/00 - Start Here/Home.md" content/index.md
             else
               echo -e "---\ntitle: Linux Sysadmin Notes\n---\n\n# Linux Sysadmin Notes\n\nPractical reference notes." > content/index.md
             fi
+          fi
+
+          # Apply custom theme / config if present
+          if [ -f ../vault/quartz-config/quartz.config.ts ]; then
+            cp ../vault/quartz-config/quartz.config.ts ./quartz.config.ts
+            echo "Applied custom quartz.config.ts"
+          fi
+          if [ -f ../vault/quartz-config/custom.scss ]; then
+            cp ../vault/quartz-config/custom.scss ./quartz/styles/custom.scss
+            echo "Applied custom.scss"
           fi
 
       - name: Install and build Quartz
