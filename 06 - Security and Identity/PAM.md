@@ -1,55 +1,91 @@
 # PAM
 
 ## Concept
-PAM is a modular authentication and session framework used by many Linux services.
+
+PAM (Pluggable Authentication Modules) is the modular framework Linux uses for authentication, account management, password changes, and session setup. Almost every login path (sshd, sudo, login, su, graphical greeters, etc.) goes through PAM.
 
 ## Why it matters
-A seemingly local login issue can result from password policy, LDAP/SSSD or access modules.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- “I can’t log in” tickets frequently land in PAM configuration, password policy, or account modules
+- Centralised auth (SSSD, LDAP, FreeIPA, Active Directory) is wired in through PAM
+- A single misconfigured line in a PAM stack can lock out all interactive access
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+Understanding the stack order and control flags is essential for safe changes.
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+## Mental Model
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+PAM stack (example: /etc/pam.d/sshd)
+
+auth      → “who are you?” (password, key, 2FA…)
+account   → “are you allowed?” (expired, locked, time restrictions…)
+password  → password changes / quality checks
+session   → setup/teardown (limits, logging, home directory…)
+
+Control flags:
+required    → must succeed; continue regardless
+requisite   → must succeed; fail immediately on failure
+sufficient  → success is enough (if no prior required failed)
+optional    → only matters if it is the only module
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Modules are tried in order. The combination of results and flags decides the final outcome.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# List PAM configuration for a service
+cat /etc/pam.d/sshd
+cat /etc/pam.d/sudo
+cat /etc/pam.d/system-auth          # common on RHEL-like
+cat /etc/pam.d/common-auth         # common on Debian-like
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Test authentication (careful on production)
+pamtester sshd username authenticate
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Check account status
+passwd -S username
+chage -l username
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# SSSD / identity related
+systemctl status sssd
+sssctl user-checks username -a auth
+journalctl -u sssd -f
+
+# Useful log locations
+journalctl -u sshd
+tail -f /var/log/secure            # RHEL-like
+tail -f /var/log/auth.log          # Debian-like
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Typical PAM-related cause                  | First checks                              |
+|--------------------------------------|--------------------------------------------|-------------------------------------------|
+| Password rejected for all users      | pam_unix / password quality / SSSD         | `/etc/pam.d/*`, auth logs                 |
+| Root can log in, normal users cannot | account module (nologin, expired, faillock)| `chage -l`, `faillock`, pam_access        |
+| SSH key works, password does not     | Password auth disabled or module order     | sshd_config + PAM auth stack              |
+| “Account locked” after bad attempts  | pam_faillock / pam_tally2                  | `faillock --user user`                    |
+| Home directory not created           | pam_mkhomedir missing or failing           | session stack                             |
+| sudo asks for password unexpectedly  | pam_unix vs pam_sss order, or timestamp    | `/etc/pam.d/sudo`                         |
+
+## Investigation Tips
+
+- Never edit PAM stacks without a root session (or console) already open; a bad change can lock you out.
+- On modern systems many stacks include shared files (`system-auth`, `common-auth`, `password-auth`). Change the right file.
+- Auth logs (`/var/log/secure` or `auth.log`) usually show which module failed.
+- For centralised auth, verify SSSD/LDAP connectivity first (`sssctl`, `getent passwd user`).
+- `pam_faillock` (RHEL 8+) replaces older tally modules; unlock with `faillock --user username --reset`.
+- Test changes with a second account before logging out of your working session.
+
+## Related Notes
+
+- [[sudo]]
+- [[SSH Hardening and Troubleshooting]]
+- [[Users Groups and Permissions]]
+- [[Secrets Management]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
