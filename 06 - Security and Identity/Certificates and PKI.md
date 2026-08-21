@@ -1,55 +1,98 @@
 # Certificates and PKI
 
 ## Concept
-Certificates bind identities to public keys under a trust chain.
+
+Public Key Infrastructure (PKI) binds identities to public keys via certificates issued by a trusted Certificate Authority (CA). TLS, mutual TLS, code signing, and many internal services rely on this trust chain.
+
+Operationally you mostly care about: correct chain, correct hostname/SAN, validity period, and timely reload after rotation.
 
 ## Why it matters
-Operational failures commonly come from expiry, hostname validation, missing intermediates or reload mistakes.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- Expired or mis-matched certificates are one of the most common causes of sudden “TLS handshake failed” or browser warnings
+- Missing intermediate certificates break clients that do not have the full chain
+- Hostname / SAN mismatches fail modern clients even if the cert is otherwise valid
+- Poor rotation and reload practices cause outages during certificate renewal
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+Most certificate problems are configuration or operational, not cryptography.
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+## Mental Model
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Client trust store
+        ↓
+   Root CA (trusted)
+        ↓
+ Intermediate CA(s)
+        ↓
+  Leaf / server certificate  ← presented by the service
+
+Validation checks:
+- Chain of trust to a trusted root
+- Not expired / not yet valid
+- Hostname matches CN or SAN
+- Key usage / extended key usage appropriate
+- (Optional) revocation (CRL / OCSP)
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+The server must send the leaf + intermediates; the client supplies the root.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Inspect a certificate file
+openssl x509 -in cert.pem -text -noout
+openssl x509 -in cert.pem -noout -dates -subject -issuer
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Check a remote server’s presented certificate
+openssl s_client -connect example.com:443 -servername example.com </dev/null
+openssl s_client -connect example.com:443 -servername example.com -showcerts </dev/null
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Verify a chain (leaf + intermediates against a CA bundle)
+openssl verify -CAfile ca-bundle.pem -untrusted intermediate.pem leaf.pem
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Extract dates only (good for monitoring)
+openssl x509 -in cert.pem -noout -enddate
+
+# Check certificate from a running service (nginx example)
+openssl s_client -connect localhost:443 -servername myhost </dev/null 2>/dev/null | openssl x509 -noout -dates
+
+# Convert formats when needed
+openssl x509 -in cert.crt -outform PEM -out cert.pem
+openssl pkcs12 -in bundle.p12 -out bundle.pem -nodes
+
+# Quick expiry check script idea
+echo | openssl s_client -connect host:443 -servername host 2>/dev/null | openssl x509 -noout -dates
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Typical cause                              | First checks                                      |
+|--------------------------------------|--------------------------------------------|---------------------------------------------------|
+| Certificate has expired              | Missed renewal / no monitoring             | `openssl x509 -enddate`, monitoring alerts        |
+| Hostname mismatch                    | Cert issued for wrong name / missing SAN   | `openssl x509 -text` → Subject Alternative Name   |
+| “Unable to get local issuer”         | Missing intermediate in server chain       | `-showcerts`, compare with working chain          |
+| Works in browser, fails in app       | App trust store different / incomplete     | App’s CA bundle, Java keystore, etc.              |
+| Intermittent TLS failures            | Multiple certs / SNI / wrong vhost         | Check which cert is served per name               |
+| Service still serves old cert        | Forgot reload after renew                  | Reload nginx/haproxy/apache, confirm with s_client|
+| Client rejects after CA change       | New root not in client trust store         | Distribute updated CA bundle                      |
+
+## Investigation Tips
+
+- Always use `-servername` (SNI) when testing HTTPS; otherwise you may get the default vhost certificate.
+- Compare the chain the server actually sends (`-showcerts`) with what you expect.
+- Check both the leaf expiry and any intermediate expiry.
+- For internal PKI, keep the root offline and use short-lived intermediates; document the trust distribution process.
+- Automate expiry monitoring (30/14/7 day warnings) and test the renewal + reload path regularly.
+- After renewing, verify the live endpoint, not only the files on disk.
+
+## Related Notes
+
+- [[TLS Troubleshooting]]
+- [[curl Deep Dive]]
+- [[SSH Hardening and Troubleshooting]]
+- [[Secrets Management]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
