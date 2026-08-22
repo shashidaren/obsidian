@@ -1,55 +1,98 @@
 # High Availability
 
 ## Concept
-HA reduces single points of failure through redundancy and failover.
+
+High Availability (HA) is the design and operational practice of keeping a service running through the failure of individual components (hosts, processes, disks, network paths) by using redundancy, health checks, and automated or rapid failover.
 
 ## Why it matters
-Redundancy without correct failure detection can still produce outages.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- Single points of failure turn routine hardware or process crashes into full outages
+- Redundancy without correct failure detection still produces downtime (or split-brain)
+- Clients and operators need predictable behaviour when a node disappears
+- HA is cheaper than full DR for common failures, but it does not replace DR for site/region loss
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+“We have two servers” is not HA until failover is reliable, tested, and understood.
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+## Mental Model
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+HA building blocks:
+  Redundancy     → multiple instances of the critical component
+  Health checks  → decide when a member is unfit
+  Failover       → move traffic or role to a healthy member
+  State          → shared, replicated, or carefully partitioned data
+  Quorum         → avoid split-brain when the cluster partitions
+
+Common patterns:
+  Active/passive   → one primary, standby takes over
+  Active/active    → multiple primaries sharing load
+  Load balancer + N backends
+  Database primary + replicas (with promotion)
+  Floating IP / VIP + keepalived / Pacemaker
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+The hard parts are state, split-brain, and false positives from flappy health checks.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Process and unit health
+systemctl status <service>
+systemctl list-units --failed
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Cluster / membership examples (tool-specific)
+pcs status                    # Pacemaker
+corosync-quorumtool -s
+keepalived -t -f /etc/keepalived/keepalived.conf
+ip -br addr                   # check VIP presence
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Load balancer / backend health (examples)
+curl -sI http://backend:port/healthz
+ss -lntp | grep :443
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Database replication / lag (examples)
+# PostgreSQL: SELECT * FROM pg_stat_replication;
+# MySQL: SHOW REPLICA STATUS\G
+
+# Kernel / network path basics during failover
+ip route
+ping -c 3 <peer>
+journalctl -u keepalived -u corosync -u pacemaker -n 50 --no-pager
+```
+
+Know the exact health-check endpoint and failover trigger for every HA pair you own.
+
+## Common Failure Modes & Symptoms
+
+| Symptom                                      | Likely cause                                      | First checks                                      |
+|----------------------------------------------|---------------------------------------------------|---------------------------------------------------|
+| Both nodes think they are primary            | Split-brain; lost quorum or fencing               | Quorum status, fencing logs, data divergence      |
+| Failover never happens                       | Health check too weak or VIP stuck                | Health endpoint, keepalived/Pacemaker logs        |
+| Failover flaps                               | Flappy check, network blips, resource pressure    | Check thresholds, history of events               |
+| Service up but clients still fail            | DNS / LB still pointing at dead node              | VIP, LB pool, client caches                       |
+| Standby cannot take over                     | Config drift, missing packages, unreplicated state| Compare configs, test promotion on schedule       |
+| HA works for process crash, not host crash   | No fencing or shared storage not handled          | Simulate host power-off in a maintenance window   |
+
+## Investigation Tips
+
+- Always ask: what is the single point of failure left? (VIP host, shared disk, license server, external DNS.)
+- Prefer automatic failover for well-understood failure modes; require human confirmation for ambiguous ones if the cost of wrong promotion is high.
+- Test failover regularly (process kill, network partition, host reboot). Document the observed RTO.
+- Fencing (STONITH) exists to prevent split-brain; never disable it “to make the cluster start”.
+- Health checks should reflect user-visible health, not only “process is running”.
+- Keep standby configuration in sync with primary via automation; manual drift is the usual reason standby fails when needed.
+- HA does not protect against bad deploys or data corruption — that is change management, backups, and DR.
+
+## Related Notes
+
+- [[Disaster Recovery]]
+- [[Backup Strategy]]
+- [[Capacity Planning]]
+- [[Incident Management]]
+- [[Change Management]]
+- [[Load balancing concepts in Services DNS and Ingress]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
