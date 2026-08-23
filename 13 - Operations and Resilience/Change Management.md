@@ -1,55 +1,86 @@
 # Change Management
 
 ## Concept
-Changes should define purpose, risk, validation and rollback.
+
+Change management is the set of practices that make production changes safer: clear purpose, risk assessment, validation steps, and an explicit rollback path. It ranges from lightweight peer review for low-risk changes to formal CAB processes for high-impact ones.
 
 ## Why it matters
-Small reversible changes are easier to operate safely.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- Most outages are caused or triggered by a change
+- Small, reversible, well-validated changes are dramatically safer than large, irreversible ones
+- Without a shared language for risk, teams either move too slowly or ship dangerous changes casually
+- Good change discipline shortens recovery because rollback is already planned
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+The goal is not bureaucracy; it is predictable, recoverable change.
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+## Mental Model
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Propose → Assess risk → Review → Implement → Validate → (Rollback if needed) → Record
+
+Risk roughly = blast radius × uncertainty × irreversibility
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Classify changes:
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+- **Standard** — pre-approved, low risk, automated or well-rehearsed (e.g. routine package update with canary)
+- **Normal** — needs review; moderate risk
+- **Emergency** — required to restore service; still record and review after the fact
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+## Key Practices
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+```bash
+# Minimum viable change record (even for small changes)
+# - What is changing and why
+# - Risk / blast radius
+# - Validation steps (what “success” looks like)
+# - Rollback steps (exact commands or revert PR)
+# - Window / freeze considerations
+# - Who is executing and who is on standby
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Prefer:
+# - Feature flags / config toggles over code deploys when possible
+# - Canary or progressive delivery
+# - Automated tests + smoke checks post-change
+# - Explicit maintenance windows for high-impact work
+```
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+Useful guardrails:
+
+- Change freeze during peak business periods or major events
+- Peer review for anything that touches production config, schema, or traffic paths
+- Automated rollback triggers where safe (e.g. error-rate spike after deploy)
+
+## Common Failure Modes & Symptoms
+
+| Failure mode                         | Typical symptom                            | Mitigation                                |
+|--------------------------------------|--------------------------------------------|-------------------------------------------|
+| No rollback plan                     | “We’ll figure it out if it breaks”         | Require rollback steps before approval    |
+| Giant change                         | Multi-hour, multi-service deploy           | Split into smaller, independently releasable pieces |
+| Validation is “looks fine”           | No metrics or synthetic check              | Define concrete success criteria + dashboards |
+| Emergency changes never reviewed     | Same class of mistake repeats              | Blameless post-change review              |
+| Process theatre                      | Long forms that nobody reads               | Right-size process to actual risk         |
+| Silent config drift                  | Manual hotfixes that never reach IaC       | Treat config as code; reconverge          |
+
+## Investigation Tips
+
+- After any incident, the first question is often “what changed?” — keep a searchable change log (tickets, PRs, deploy markers).
+- Correlate alert start times with deploy and config-change timestamps.
+- For risky changes, practice the rollback *before* the change window when possible.
+- Document the actual commands run; future you (or the next on-call) will need them.
+- Distinguish “we followed the process” from “the change was safe”. Process is a tool, not the goal.
+
+## Related Notes
+
+- [[Incident Management]]
+- [[Root Cause Analysis]]
+- [[High Availability]]
+- [[Backup Strategy]]
+- [[Disaster Recovery]]
+- [[IaC Drift]]
+- [[Documentation and Runbooks]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
