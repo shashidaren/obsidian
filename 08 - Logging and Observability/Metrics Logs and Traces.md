@@ -1,55 +1,83 @@
 # Metrics Logs and Traces
 
 ## Concept
-Metrics show trends, logs provide event detail and traces expose request paths.
+
+The three pillars of observability: **metrics** (numeric time series), **logs** (discrete events with context), and **traces** (request/path journeys across services). Together they answer “what is broken, where, and why”.
 
 ## Why it matters
-Good observability correlates these signals with consistent timestamps and identifiers.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- Metrics tell you *that* something is wrong and how widespread it is
+- Logs tell you *what* happened on a specific host or process
+- Traces tell you *where* latency or errors occurred across a distributed path
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+Relying on only one pillar leaves blind spots. Senior ops correlates all three with consistent timestamps and identifiers.
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+## Mental Model
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Metrics  →  “Is the system healthy / trending?”   (RED / USE / golden signals)
+Logs     →  “What exactly happened here?”         (events, errors, state changes)
+Traces   →  “Where did this request spend time?”  (spans across services)
+
+Correlation keys: timestamp + host + service + request-id / trace-id / pod
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+- Metrics are cheap to store and query at scale; good for alerting and dashboards.
+- Logs are high-cardinality and expensive; use structured logging and sampling.
+- Traces require instrumentation (OpenTelemetry, Jaeger, Zipkin, vendor APM).
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands / Checks
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Local metrics (host level)
+uptime
+vmstat 1 5
+iostat -xz 1 5
+ss -s
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Logs
+journalctl -u <service> --since "10 min ago" -o short-iso
+journalctl -p err -b
+tail -f /var/log/<app>.log
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Trace-related (when present)
+# Look for traceparent / X-Request-ID / correlation IDs in logs
+grep -E 'trace|request.id|X-Request' /var/log/<app>.log | tail
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Quick health correlation
+date; uptime; systemctl --failed; journalctl -p err -b --no-pager | tail -20
+```
+
+In production you usually query Prometheus/Grafana, Elasticsearch/Loki, and a tracing backend rather than raw host tools.
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Likely gap                              | First checks                                      |
+|--------------------------------------|-----------------------------------------|---------------------------------------------------|
+| Alert fires but no useful detail     | Metrics without linked logs/traces      | Does the alert include host + service + time?     |
+| “It was slow” with no evidence       | Missing traces or high-cardinality logs | Was request-id logged? Was tracing enabled?       |
+| Logs present but hard to search      | Unstructured / no consistent fields     | Check for JSON logs, common labels, retention     |
+| Metrics look fine, users complain    | Wrong golden signals or lagging metrics | Check user-facing latency/error rate, not just CPU|
+| Trace shows gap with no span         | Missing instrumentation or sampling     | Verify SDK / agent on that service                |
+| Clock skew between systems           | NTP / timezone issues                   | Compare timestamps across hosts                   |
+
+## Investigation Tips
+
+- Start with the symptom timeline: when did metrics deviate, when did logs start showing errors, where do traces show the first slow span?
+- Always pull a request-id / trace-id from a failing user request and follow it.
+- Prefer RED (Rate, Errors, Duration) for services and USE (Utilisation, Saturation, Errors) for resources.
+- High-cardinality labels in metrics (user-id, full path) will burn storage and query performance — design labels carefully.
+- During incidents, the first useful action is often “show me the error rate and p99 latency for the last 30 minutes”, then drill into logs/traces for that window.
+
+## Related Notes
+
+- [[Logging Architecture]]
+- [[Alert Design]]
+- [[journald and Persistent Storage]]
+- [[logrotate]]
+- [[Performance Investigation Framework]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
