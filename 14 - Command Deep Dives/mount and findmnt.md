@@ -1,55 +1,98 @@
 # mount and findmnt
 
 ## Concept
-`mount` attaches filesystems; `findmnt` displays the mount tree and source relationships.
+
+`mount` attaches a filesystem to a directory in the tree. `findmnt` (from util-linux) shows what is currently mounted, from where, with which options, in a clear tree or table. Together they are the primary tools for understanding and managing the mount namespace.
 
 ## Why it matters
-Use them to understand what is actually mounted before editing configuration.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- “Disk full” on one path may be a different filesystem than you think
+- Boot failures and service start failures are often bad `/etc/fstab` or missing mounts
+- NFS/CIFS hangs, read-only filesystems, and bind mounts are diagnosed here first
+- Before editing fstab or unmounting anything, you must know the real mount table
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+```
+Source (block device, UUID, network share, tmpfs…)
+    → mount(2)
+        → target directory in the VFS tree
+            → options (rw/ro, noexec, _netdev, …)
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+findmnt reads the kernel mount table (and can compare to /etc/fstab).
+mount both displays and performs mounts; prefer findmnt for inspection.
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Persistent mounts live in `/etc/fstab` (or systemd `.mount` units). Runtime mounts disappear on reboot unless recorded.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Current mounts — prefer findmnt
+findmnt
+findmnt -D                    # df-like view with sources
+findmnt /var                  # what is mounted at /var (or parent)
+findmnt -T /var/log           # target path lookup
+findmnt -S /dev/sda1          # by source
+findmnt -t xfs,ext4           # by type
+findmnt -o TARGET,SOURCE,FSTYPE,OPTIONS
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Compare kernel mounts to fstab
+findmnt --verify
+findmnt --fstab
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Classic mount listing
+mount | column -t
+cat /proc/mounts
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Mount by UUID or LABEL (preferred in fstab)
+mount UUID=... /mnt/data
+mount LABEL=backup /mnt/backup
+
+mount -a                      # mount all in fstab (skips noauto)
+mount -o remount,ro /
+mount -o remount,rw /
+
+# Unmount
+umount /mnt/data
+umount -l /mnt/data           # lazy (detach now, cleanup when busy ends)
+umount -f /mnt/nfs            # force (use carefully, especially NFS)
+
+# Bind and rbind
+mount --bind /src /dst
+mount --rbind /src /dst
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom                              | Likely cause                              | First checks                                      |
+|--------------------------------------|-------------------------------------------|---------------------------------------------------|
+| Mount point empty / wrong data       | Not mounted, or wrong device mounted      | `findmnt /path`, `lsblk -f`                       |
+| “Target is busy” on umount           | Open files, cwd, or nested mounts         | `lsof +f -- /path`, `findmnt -R /path`            |
+| Boot hangs or emergency mode         | Bad fstab entry (wrong UUID, missing net) | `findmnt --verify`, comment out, `systemd-analyze`|
+| NFS/CIFS mount hangs                 | Network, server, or credentials           | `_netdev` in fstab, soft/hard options, see NFS note |
+| Filesystem suddenly read-only        | Journal error, remount-ro on error        | `dmesg`, `findmnt -o OPTIONS`, fsck planning      |
+| Space full on `/` but `df` shows free elsewhere | Path is on root, not the big data mount | `findmnt -T /path`, `df -h /path`                 |
+
+## Investigation Tips
+
+- Always use `findmnt -T <path>` when diagnosing “which filesystem is this directory on?”
+- For fstab changes: `findmnt --verify` then `mount -a` before rebooting.
+- Prefer UUID or LABEL in fstab over `/dev/sdX` names.
+- Lazy unmount (`-l`) is safer when a mount is stuck; force (`-f`) can cause data loss on network filesystems.
+- systemd mount units and `RequiresMountsFor=` matter for service ordering — a unit can be “active” while its data directory is not yet mounted.
+- Bind mounts and mount namespaces (containers) mean the same path can look different from host vs container.
+
+## Related Notes
+
+- [[Filesystems and Mounts]]
+- [[lsblk]]
+- [[Block Devices and Partitions]]
+- [[df and du Deep Dive]]
+- [[NFS Troubleshooting]]
+- [[Disk Full Runbook]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 

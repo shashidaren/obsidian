@@ -1,55 +1,93 @@
 # lsblk
 
 ## Concept
-`lsblk` displays block device relationships.
+
+`lsblk` lists block devices in a tree: disks, partitions, LVM volumes, RAID, multipath, and loop devices. It shows the relationship between physical devices and the layers built on top of them.
 
 ## Why it matters
-It is essential for safely identifying disks, partitions, RAID and LVM layers.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- Before any disk, partition, LVM, or filesystem work you must know what is actually present
+- Prevents operating on the wrong device (the classic disaster)
+- Quickly answers: which disk is this LVM volume on? Is this partition mounted? What is the model/serial?
+- Essential when troubleshooting missing volumes, wrong mount points, or capacity issues
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+Never assume device names (`sda`, `nvme0n1`) are stable across reboots — always confirm with `lsblk` (and preferably by UUID/WWN).
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+## Mental Model
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Physical disk
+  └── partition(s)
+        └── LVM PV → VG → LV
+              └── filesystem (mounted or not)
+
+Or: disk → RAID → partition → filesystem
+Or: multipath device → partition → LVM → filesystem
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+`lsblk` walks this stack and prints it as a tree. Columns tell you size, type, mountpoint, and (with flags) UUID, model, and filesystem type.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# Default tree view
+lsblk
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# Full detail: filesystem type, UUID, mountpoint, model
+lsblk -f
+lsblk -o NAME,SIZE,TYPE,FSTYPE,UUID,MOUNTPOINT,MODEL,SERIAL
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Include empty slots / all devices
+lsblk -a
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# JSON (great for scripts)
+lsblk -J
+
+# Only disks (no partitions)
+lsblk -d
+
+# Specific device
+lsblk /dev/sda
+lsblk -f /dev/mapper/vg-root
+
+# Show dependency tree for one device
+lsblk -s /dev/mapper/vg-data   # inverse tree (who depends on this)
+
+# Sizes in bytes (scripting)
+lsblk -b -o NAME,SIZE,TYPE
+```
+
+Useful columns: `NAME`, `SIZE`, `TYPE`, `FSTYPE`, `UUID`, `MOUNTPOINT`, `MODEL`, `SERIAL`, `WWN`, `TRAN` (transport: sata, nvme, iscsi…).
+
+## Common Failure Modes & Symptoms
+
+| Situation                            | What lsblk shows / helps with              | Next step                                      |
+|--------------------------------------|--------------------------------------------|------------------------------------------------|
+| “Where did my disk go?”              | Missing from tree, or TYPE=disk but no children | Check cables, HBA, multipath, `dmesg`          |
+| Wrong disk targeted for wipe/format  | Confirm SIZE, MODEL, SERIAL, existing FSTYPE | Always double-check before `mkfs` / `dd`       |
+| LVM volume not visible               | PV present but LV missing, or VG inactive  | `pvs`/`vgs`/`lvs`, `vgchange -ay`              |
+| Mounted but not what you expected    | MOUNTPOINT column vs `/proc/mounts`        | See [[mount and findmnt]]                      |
+| Capacity mismatch                    | SIZE of disk vs sum of partitions/LVs      | Alignment, residual partitions, thin pools     |
+| Cloud/VM disk added but not seen     | No new device after attach                 | Rescan SCSI bus, check hypervisor attachment   |
+
+## Investigation Tips
+
+- Prefer identifying devices by UUID, WWN, or serial rather than by `sdX` name.
+- After hot-adding a disk, you may need a SCSI rescan before it appears:  
+  `echo "- - -" > /sys/class/scsi_host/host*/scan` (or the specific host).
+- Combine with `lsblk -f` and `blkid` when building or debugging `/etc/fstab`.
+- On multipath systems, look at the multipath device (`mpathX` or `/dev/mapper/...`), not the underlying paths.
+- `lsblk -s` (inverse) is useful when you have an LV or mapper name and need to find the physical disk underneath.
+
+## Related Notes
+
+- [[Block Devices and Partitions]]
+- [[LVM Deep Dive]]
+- [[mount and findmnt]]
+- [[Filesystems and Mounts]]
+- [[df and du Deep Dive]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
