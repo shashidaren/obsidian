@@ -1,55 +1,104 @@
 # Patching Strategy
 
 ## Concept
-Patching balances vulnerability reduction against operational risk.
+
+A patching strategy is the operational system for applying security and bugfix updates: what gets patched, how fast, on which hosts first, how you prove it is safe, and how you roll back. It is risk management, not “run `yum update` on Friday”.
 
 ## Why it matters
-Classify urgency, test representative workloads, define rollback and verify after change.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- Unpatched kernels and libraries are how most commodity exploits land on production hosts
+- Blind full upgrades cause outages that are worse than the CVEs they were meant to fix
+- Without inventory, reboot policy, and rollback, you cannot meet either security or uptime goals
+- Auditors ask “what is patched, since when, and how do you know?” — not “do you care about security?”
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+## Mental Model
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+```
+Classify  → Test  → Stage  → Roll out  → Verify  → Reboot if needed  → Record
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+Urgency buckets (example):
+  Emergency   — actively exploited, internet-facing. Hours, not days.
+  Fast        — high CVSS on reachable services. Days.
+  Routine     — monthly/quarterly baseline. Planned window.
+  Defer       — no exposure path; document exception + review date.
+
+Blast radius control:
+  canaries / lowest-tier first
+  one failure domain at a time (rack, AZ, cluster quorum)
+  never patch the last healthy replica first
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Kernel patches usually need a reboot (or livepatch). Library patches need a process restart to unmap the old `.so`. Package “installed” ≠ “running the new code”.
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+## Key Commands
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+```bash
+# What needs updating?
+# Debian/Ubuntu
+apt update
+apt list --upgradable
+apt changelog <pkg> | head -40
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+# RHEL/Fedora/Rocky
+dnf check-update
+dnf updateinfo list security
+dnf updateinfo info <advisory>
+needs-restarting -r          # yum-utils / dnf-utils: reboot needed?
+needs-restarting -s          # which services need restart
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# What is actually running vs on disk?
+rpm -V openssl               # verify files vs package
+apt-get changelog openssl
+# After glibc/openssl/ssh updates, restart (or reboot) consumers
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+lsof | grep 'DEL\|deleted'  # processes still holding replaced libraries
+
+# Kernel / reboot awareness
+uname -r
+rpm -q kernel || dpkg -l 'linux-image-*'
+# Compare running kernel to latest installed package
+
+# Record what changed in a window
+grep -E 'Installed|Updated|Erased' /var/log/dnf.log | tail
+grep -E 'upgrade |install ' /var/log/apt/history.log | tail
+journalctl --since "2026-08-29 01:00" | grep -i -E 'dnf|yum|apt'
+```
+
+Live kernel patching (kpatch, Ksplice, Canonical Livepatch) reduces reboot urgency for some CVEs. It is not a substitute for eventually running a supported kernel.
+
+## Common Failure Modes & Symptoms
+
+| Symptom | Likely cause | First checks |
+|---------|--------------|--------------|
+| Service down after “successful” patch | Restart picked up incompatible config or ABI | journal of that unit, package changelog, last working version |
+| Host patched, process still vulnerable | Old library still mapped; no restart/reboot | `needs-restarting`, `lsof` deleted libs, `uname -r` |
+| Partial fleet patched | Automation inventory gap, hold, or failed repo | compare versions across hosts, `apt-mark showhold` / versionlock |
+| Quorum / HA outage | Patched too many members at once | cluster status, one-at-a-time rule |
+| Rollback impossible | No previous package kept, no snapshot | `dnf history`, VM/LVM snapshot policy |
+| Emergency CVE ignored for weeks | No owner, no SLA, ticket drowned | named owner + urgency bucket |
+| Dev boxes current, prod ancient | “prod is too scary to touch” | that is the risk; shrink the batch, do not skip |
+
+## Investigation Tips
+
+- Treat patching as a change: ticket, window, canary, rollback, verification. See [[Change Management]].
+- Maintain a software bill of what is internet-facing. Those packages get the fast bucket by default.
+- Reboots are part of the strategy. A “no-reboot” estate accumulates months of kernel CVEs and deleted-but-mapped libraries.
+- Keep at least one unpatched or snapshot-restorable path for the first wave (previous kernel on GRUB, `dnf history undo`, VM snapshot).
+- Verify function, not just package version: health check, TLS handshake, login path, replication.
+- Phased Ubuntu packages and RHEL versionlocks silently hold updates. Check them when “nothing is upgrading”.
+- Automate inventory (`rpm -q` / `dpkg-query` across the fleet) so drift is visible without SSH-ing host by host.
+
+## Related Notes
+
+- [[Change Management]]
+- [[Major Version Upgrades]]
+- [[Repository Troubleshooting]]
+- [[APT and dpkg]]
+- [[RPM and DNF]]
+- [[GRUB and Kernel Parameters]]
+- [[Incident Management]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
