@@ -1,55 +1,107 @@
 # Ansible Troubleshooting
 
 ## Concept
-Failures can occur in inventory resolution, connectivity, privilege escalation, module execution or facts.
+
+Ansible failures cluster in a few layers: inventory resolution, SSH/connection, privilege escalation, module execution, and variable/fact surprises. Debug by isolating the layer, not by adding `-vvvv` to a 200-host play and hoping.
 
 ## Why it matters
-Reproduce with narrow play limits and increased verbosity.
 
-## Mental model
-Treat this topic as one component in a larger system. A correct diagnosis usually requires identifying dependencies above and below the component rather than changing the first setting that appears related.
+- A failed play mid-rollout leaves the fleet split-brained
+- `changed` on every run hides real drift and makes reviews useless
+- Become and SSH problems look like "Ansible is down" when the host is fine
+- One bad variable in `group_vars/all` can hit every environment
 
-## What failure looks like
-Common indicators include:
-- explicit errors in application or system logs
-- timeouts or increased latency
-- resource saturation or exhaustion
-- repeated retries and cascading failures
-- differences between healthy and unhealthy hosts
+Narrow reproduction is the whole game.
 
-## Investigation workflow
-1. Define the exact symptom and affected scope.
-2. Establish the first known time of failure.
-3. Check recent deployments, configuration changes and capacity changes.
-4. Collect evidence before restarting or deleting anything.
-5. Compare with a known healthy baseline where possible.
-6. Test one hypothesis at a time.
-7. Verify both technical recovery and user-facing behavior.
+## Mental Model
 
-## Useful commands
-```bash
-date
-uptime
-systemctl --failed
-journalctl -p err -b
+```
+Failure layer checklist (top → bottom):
+
+1. Did we target the right host?
+2. Can we reach it? (DNS, SSH, become)
+3. Did facts / vars resolve as expected?
+4. Did the module run and report the truth?
+5. Did handlers / later tasks depend on a silent skip?
 ```
 
-Add topic-specific commands and examples to this note as you encounter them in real systems.
+Verbosity:
 
-## Safe remediation
-Prefer the smallest reversible change that addresses evidence. Record the command, configuration change and expected result. If risk is high, define rollback before implementation.
+- `-v` — task results
+- `-vv` — more module detail
+- `-vvv` — connection / SSH
+- `-vvvv` — usually noise; use when SSH itself is the suspect
 
-## Verification
-- Original symptom no longer reproduces.
-- Logs stop producing the relevant error.
-- Resource and latency metrics return to expected levels.
-- Dependencies remain healthy.
+## Key Commands
 
-## Prevention
-Improve monitoring, capacity, configuration validation, automation or documentation so the same failure is detected earlier or cannot recur.
+```bash
+# Prove targeting
+ansible-playbook -i inventory/ site.yml --list-hosts --limit web01
+ansible-inventory -i inventory/ --host web01
 
-## Related topics
-See the surrounding notebook for command-specific notes and [[Troubleshooting Methodology]].
+# Prove connectivity and become separately
+ansible web01 -i inventory/ -m ping -vvv
+ansible web01 -i inventory/ -m command -a id -b -vv
 
-## Personal lessons learned
-Record environment-specific discoveries, incident links and commands that proved useful.
+# Narrow playbook replay
+ansible-playbook -i inventory/ site.yml --limit web01 --start-at-task "Install nginx" -vv
+ansible-playbook -i inventory/ site.yml --limit web01 --step
+ansible-playbook -i inventory/ site.yml --limit web01 --check --diff
+
+# See the exact module args Ansible sent
+ANSIBLE_DEBUG=1 ansible-playbook ...   # last resort; huge output
+
+# Syntax and config that is actually in effect
+ansible-playbook --syntax-check site.yml
+ansible-config dump --only-changed
+
+# Temporary gather + dump vars for one host
+ansible web01 -i inventory/ -m setup
+ansible-playbook -i inventory/ dump-vars.yml --limit web01   # debug: var=hostvars[inventory_hostname]
+```
+
+Useful task-level debug inside a playbook:
+
+```yaml
+- debug:
+    var: ansible_facts['distribution']
+- debug:
+    msg: "pkg={{ pkg_name }} dest={{ dest_path }}"
+```
+
+## Common Failure Modes & Symptoms
+
+| Symptom | Likely cause | First checks |
+|---------|--------------|--------------|
+| `UNREACHABLE!` / connection timed out | SSH, DNS, wrong `ansible_host`, bastion, firewall | `ping` module with `-vvv`, try raw `ssh` as the same user |
+| Host key / known_hosts errors | First connect, rebuilt VM, `host_key_checking` | Confirm identity; do not blindly disable checking in prod |
+| `Missing sudo password` / become denied | sudoers, requiretty, wrong become user | `ansible -m command -a id -b` |
+| `MODULE FAILURE` / traceback | Python on target, SELinux, missing dep | Check remote Python, `journalctl`, `/var/log/secure` |
+| Task skipped unexpectedly | `when:` used a fact that was undefined / wrong type | `debug` the condition inputs |
+| Always `changed=true` | `shell`/`command`, template whitespace, non-idempotent module | Switch module; add `--diff` |
+| Handler never fired | `notify` name mismatch, `changed` was false, `flush_handlers` never reached | Compare notify vs handler names |
+| Play succeeded, host still wrong | `--check` only, wrong inventory, vars shadowed | Re-run without `--check`; dump host vars |
+| Galaxy / collection import fail | Network, version pin, path | `ansible-galaxy collection list` |
+
+## Investigation Tips
+
+- Reproduce with `--limit one-host` before touching the rest of the group.
+- Split SSH from become: first `ping` / `command id` without `-b`, then with `-b`.
+- If only prod fails, compare `group_vars` and extra-vars — not the playbook text.
+- `command` and `shell` skip change detection. Wrap with `creates=` / `removes=` or, better, use a real module.
+- Forks and serial: a play with `serial: 1` failing on host 3 may have already changed hosts 1–2. Know your rollback.
+- Connection plugins matter: `local`, `podman`, `community.docker`, `winrm` each fail differently. Confirm `ansible_connection`.
+- After a failed rollout, inventory the drift (`--check --diff` on remaining hosts) instead of immediately re-running the whole site play.
+
+## Related Notes
+
+- [[Ansible Architecture]]
+- [[SSH Hardening and Troubleshooting]]
+- [[SELinux Deep Dive]]
+- [[sudo]]
+- [[Change Management]]
+- [[Troubleshooting Methodology]]
+
+## Personal Lessons Learned
+
+> 
