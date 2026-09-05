@@ -2,66 +2,91 @@
 
 ## Concept
 
-`iostat` (from the sysstat package) reports CPU and device I/O statistics: throughput, utilisation, queue lengths, and latency-related metrics. It is the primary tool for deciding whether storage is the bottleneck.
+`iostat` (sysstat) reports CPU and *per-device* I/O: transfers, throughput, utilisation, average queue, and wait time. After `vmstat` says “blocked / wa”, `iostat` names the disk, the MD/LVM device, or the virtual volume.
+
+Like `vmstat`, the first report is since boot. Use an interval. `-x` and `-z` should be muscle memory.
 
 ## Why it matters
 
-- High disk utilisation does not automatically mean “disk is too slow” — you need queue depth and service time
-- Distinguishes read vs write pressure and which device is hot
-- Essential companion to `vmstat` when `%wa` or blocked processes are elevated
+- `%util` alone is not saturation on multi-queue NVMe; `await` and `aqu-sz` complete the picture
+- Read storms and write/fsync storms look different (`rkB/s` vs `wkB/s`, `rareq-sz` vs `wareq-sz`)
+- One hot member under LVM/RAID explains “the filesystem is fine but everything stalls”
+- VM and NFS “devices” report guest-visible latency, which may be the network or the host
+
+If you grow a volume because `%util` is 100% but `await` is 0.3 ms, you spent money on a disk that was keeping up.
 
 ## Mental Model
 
 ```
-iostat shows, per device:
-- tps          = transfers per second
-- kB_read/s, kB_wrtn/s  = throughput
-- %util        = percentage of time the device was busy
-- await        = average wait time (queue + service) in ms
-- aqu-sz       = average queue length
+CPU line  — same idea as vmstat / top (us sy id wa st)
 
-High %util + high await + rising aqu-sz = storage saturation
-High %util but low await = device is busy but keeping up
+Device line (sysstat 11+ names vary slightly):
+  tps / r/s / w/s     = request rate
+  rkB/s / wkB/s       = throughput
+  rareq-sz / wareq-sz = average request size (KB)
+  aqu-sz              = average queue length (was avgqu-sz)
+  await               = average time in queue + service (ms) per request
+  r_await / w_await   = split by direction
+  %util               = share of the interval the device had at least one request in flight
 ```
+
+Saturation pattern: `await` rising, `aqu-sz` rising, throughput flattening.
+Busy-but-healthy: `%util` high, `await` flat and low, throughput at expected sequential rates.
+
+`await` is an average. A device can show 2 ms await while p99 is 200 ms. `iostat` will not show tail latency — use blktrace, application timers, or histogram metrics for that.
 
 ## Key Commands
 
 ```bash
-# Basic: CPU + devices, 1-second interval
+# Default incident command
 iostat -xz 1
 
-# Extended stats, human-readable, only active devices
-iostat -dxz 1 5
+# Five samples, human units where supported, timestamps
+iostat -t -xz 1 5
+iostat -h -xz 1 5          # if your sysstat has -h
 
-# With timestamps
-iostat -t -xz 1 10
+# Named devices only (skip loop/ram)
+iostat -xz sda nvme0n1 dm-0 1 10
 
-# Specific devices only
-iostat -xz sda nvme0n1 1 5
+# CPU omitted when you already have vmstat
+iostat -dxz 1 10
 
-# Older-style output (still useful)
-iostat -d -k 1 5          # KB/s
+# Older hosts: KB/s, no extended fields
+iostat -dk 1 5
+
+# Confirm package
+rpm -q sysstat || dpkg -l sysstat
 ```
 
-`-x` (extended) and `-z` (omit zero-activity devices) are almost always what you want.
+Device names: `sda` is the SCSI/SATA disk, `nvme0n1` the NVMe namespace, `dm-N` is LVM/multipath, `mdN` is software RAID. Always map:
+
+```bash
+lsblk -o NAME,TYPE,SIZE,MOUNTPOINT,MODEL
+dmsetup ls --tree
+```
 
 ## Common Failure Modes & Symptoms
 
-| Symptom in iostat                     | Interpretation                         | Next actions                          |
-|---------------------------------------|----------------------------------------|---------------------------------------|
-| `%util` near 100%, high `await`       | Device saturated                       | Identify heavy processes (iotop, pidstat -d), check RAID/FS |
-| High `await`, modest `%util`          | Occasional slow I/Os or queueing elsewhere | Check underlying storage, multipath, network (NFS) |
-| High write throughput, rising `aqu-sz`| Write storm / fsync pressure           | Application logs, journal, database   |
-| One device hot, others idle           | Unbalanced workload or single-disk bottleneck | LVM/RAID layout, mount options        |
-| NFS mount shows high latency          | Network or remote server issue         | See [[NFS Troubleshooting]]           |
+| Symptom | Interpretation | Next |
+|---------|----------------|------|
+| `%util` ~100%, `await` tens–hundreds ms, `aqu-sz` > 1–2 | Device saturated | `pidstat -d 1`, `iotop -oPa`, check RAID rebuild |
+| `%util` high, `await` < 1 ms on NVMe | Busy, not necessarily sick | Look at application RPS; maybe expected |
+| High `await`, modest `%util` | Slow I/Os, path blips, or queueing *behind* this device | Multipath, SAN, hypervisor storage, NFS |
+| `w_await` >> `r_await` | Write/fsync pressure, cache flush, dying disk | App checkpoints, `dirty` ratios, smartctl |
+| Tiny `rareq-sz` + huge `r/s` | Random read storm (index miss, thundering herd) | Query plans, cache hit rate |
+| Huge sequential `wkB/s`, short spike | Backup, compact, RAID resync | `cat /proc/mdstat`; change windows |
+| Only `dm-*` hot, physical disk quiet in the same sample | You sampled the wrong layer or interval | Align devices with `lsblk` |
+| NFS “disk” latency high | Network or remote server | [[NFS Troubleshooting]] |
+| First line ugly, rest fine | Since-boot average | Ignore line 1 |
 
 ## Investigation Tips
 
-- Always run with an interval (`iostat 1`) — the first report is since boot and can be misleading.
-- `%util` is a useful signal but not a perfect measure of saturation on modern multi-queue devices; watch `await` and `aqu-sz` together.
-- For NVMe and multi-queue devices, high concurrency can keep `%util` high while latency stays acceptable.
-- Pair with `iotop` or `pidstat -d 1` to find which processes are generating the I/O.
-- On virtual machines, the “device” may be a virtual disk whose real latency is determined by the hypervisor and shared storage.
+- Map the mount to the device before you blame “disk”. `findmnt -T /var/lib/mysql` then `iostat` that name.
+- Software RAID rebuilds pin `%util` and wreck `await`. Check `/proc/mdstat` and `mdadm --detail` early.
+- Thin pools and snapshots add hidden write amplification. Guest `iostat` will not show the host’s extra I/O.
+- `%util` on modern multi-queue devices can sit near 100% because *some* queue was busy, while other queues were idle. Prefer `await` + throughput vs known capability.
+- Compare read vs write size. Databases doing 8–16K writes vs a backup doing 128K–1M look nothing alike; tuning one for the other fails.
+- On VMs, “fixing” the guest scheduler will not fix a saturated datastore. Escalate with the `await` numbers; they are the evidence.
 
 ## Related Notes
 
@@ -70,9 +95,13 @@ iostat -d -k 1 5          # KB/s
 - [[Disk Full Runbook]]
 - [[pidstat Deep Dive]]
 - [[NFS Troubleshooting]]
+- [[LVM Deep Dive]]
+- [[RAID Concepts]]
 - [[Performance Investigation Framework]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
 
-> 
+- I once replaced a “slow disk” that had `%util` 98% and `await` 0.4 ms. The real problem was a single-threaded CPU path. Utilisation without wait time is not a verdict.
+- RAID-1 rebuilds have paged me more often than failing media. `iostat` looked identical to “disk dying” until I opened `/proc/mdstat`.
+- When `iostat` and the application disagree, the application is usually measuring a different layer (fsync, NFS RTT, or lock wait). Do not argue with `await`; add a layer to the model.
