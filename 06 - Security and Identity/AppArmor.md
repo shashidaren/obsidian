@@ -2,97 +2,112 @@
 
 ## Concept
 
-AppArmor is a Mandatory Access Control (MAC) system that confines programs using path-based profiles. Unlike SELinux (label-based), AppArmor decides what a binary may do based on the executable path and a declarative profile.
+AppArmor is path-based Mandatory Access Control. A profile named after an executable lists what that binary may open, map, exec, network, and which capabilities it may use. There are no filesystem labels to keep consistent; the trade-off is that a moved binary or a new data path is invisible to the profile until you say so.
 
-It is the default MAC system on Ubuntu and many SUSE-based distributions.
+Default MAC on Ubuntu and many SUSE/openSUSE systems. Same operational role as SELinux: second gate after Unix DAC. Different failure language (`apparmor="DENIED"` in the kernel log instead of AVC).
 
 ## Why it matters
 
-- Many “permission denied” or mysterious service failures on Ubuntu are AppArmor denials, not Unix permission problems
-- Profiles ship with packages; a new version or custom path can suddenly start denying legitimate access
-- Disabling AppArmor globally is rarely the right fix; understanding and adjusting the profile is
-- Useful for locking down services (nginx, MySQL, Docker, etc.) with relatively readable policy
-
-Treat denials as evidence, not as a reason to turn enforcement off permanently.
+- Ubuntu “permission denied” with correct `rwx` is often AppArmor, not DAC
+- Packaged profiles ship with nginx, MySQL, libvirt, snap, container runtimes. An upgrade can tighten a profile overnight
+- Custom install prefixes (`/opt/app/sbin/nginx`) do not match ` /usr/sbin/nginx` profiles. The process runs unconfined or under the wrong name
+- Global disable (`systemctl stop apparmor`) is the Ubuntu cousin of `setenforce 0` — it hides the bug and fails the next review
 
 ## Mental Model
 
 ```
-Executable path → profile → allowed operations on paths, capabilities, network, etc.
+exec /usr/sbin/nginx  → kernel attaches profile usr.sbin.nginx
+                      → every open/mmap/connect checked against that profile
 
-Profile states:
-  enforce  → denials are blocked and logged
-  complain → denials are only logged (learning mode)
-  unconfined → no profile applied
+profile states (per profile, not whole machine):
+  enforce    deny + log
+  complain   allow + log   (learning)
+  unconfined no profile
 
-Profiles live under /etc/apparmor.d/
-Kernel loads them; aa-status shows the current state.
+files:
+  /etc/apparmor.d/           source profiles
+  /etc/apparmor.d/disable/   symlink here to disable one profile
+  /etc/apparmor.d/local/     drop-in additions (prefer these)
 ```
 
-A process inherits the profile of its executable (or is unconfined). Changing a profile or putting it into complain mode does not require a reboot.
+A child process keeps the parent profile unless it execs a binary with its own profile (`px`/`cx` rules). That is why a helper binary suddenly “cannot read its config” after you wrap it in a launcher.
+
+Snaps and some container stacks ship *their own* profiles. Debugging Docker/containerd denials on Ubuntu without `aa-status` is how you waste an hour in `chmod`.
 
 ## Key Commands
 
 ```bash
-# Overall status and loaded profiles
+# What is loaded
 aa-status
 aa-status --enforced
 aa-status --complaining
+aa-status --json | jq '.profiles'    # if jq is handy
 
-# Kernel messages / denials (also appear in journal)
-dmesg | grep -i apparmor
-journalctl -k | grep -i apparmor
-journalctl -t apparmor
+# Kernel denials
+journalctl -k -g apparmor --since '1 hour ago'
+dmesg --ctime | grep -i apparmor
+auditd: ausearch -m AVC -ts recent   # some suites still tag these AVC
 
-# Put a profile into complain (learning) mode
+# Profile mode
 aa-complain /etc/apparmor.d/usr.sbin.nginx
+aa-enforce  /etc/apparmor.d/usr.sbin.nginx
+aa-disable  /etc/apparmor.d/usr.sbin.nginx   # unconfined; last resort
 
-# Return to enforce
-aa-enforce /etc/apparmor.d/usr.sbin.nginx
-
-# Disable a profile temporarily (unconfined)
-aa-disable /etc/apparmor.d/usr.sbin.nginx
-
-# Reload profiles after editing
+# Reload after edit
 apparmor_parser -r /etc/apparmor.d/usr.sbin.nginx
-systemctl reload apparmor          # or restart if needed
+apparmor_parser -r /etc/apparmor.d/local/usr.sbin.nginx
+systemctl reload apparmor
 
-# Generate or update a profile interactively (careful)
+# What profile is this PID under?
+cat /proc/<PID>/attr/current
+ps -eo pid,label,comm | grep nginx     # label column on newer procps
+
+# Learning tools (interactive; not for a burning prod change window)
 aa-genprof /usr/sbin/mydaemon
-aa-logprof                         # process recent denials into profile updates
+aa-logprof
+aa-autodep /usr/local/sbin/mydaemon    # skeleton only — review it
 
-# Check which profile a running process is under
-ps auxZ | grep nginx               # or cat /proc/<PID>/attr/current
+# Syntax check before reload
+apparmor_parser -Q /etc/apparmor.d/usr.sbin.nginx
 ```
+
+Prefer adding rules under `/etc/apparmor.d/local/` so a package upgrade does not clobber your exception. `#include <local/usr.sbin.nginx>` is already in most packaged profiles.
 
 ## Common Failure Modes & Symptoms
 
-| Symptom                              | Typical cause                              | First checks                                      |
-|--------------------------------------|--------------------------------------------|---------------------------------------------------|
-| Service fails to read/write files    | Profile missing path or wrong mode         | `aa-status`, `dmesg \| grep apparmor`, journal   |
-| Permission denied despite Unix perms | AppArmor denial                            | `journalctl -k -g apparmor`                       |
-| Works after `aa-complain`            | Profile is too strict                      | Review denials, add paths with `aa-logprof`       |
-| Custom binary / non-packaged path    | No profile or wrong profile name           | Create profile or use `aa-autodep`                |
-| Docker / container weirdness         | Host profile interacting with container    | Check docker/containerd profiles                  |
-| Denials after package upgrade        | Profile tightened or paths changed         | Compare package profile, re-run `aa-logprof`      |
+| What you see | Likely meaning | First checks |
+|--------------|----------------|--------------|
+| Service cannot read/write a path you just created | Profile has no rule for that path | `journalctl -k -g apparmor`; profile text |
+| Works after `aa-complain`, fails on enforce | Profile is the blocker | `aa-logprof` or a tight local addition |
+| Custom prefix binary is “fine” and also unconstrained | No profile attached | `cat /proc/PID/attr/current` → `unconfined` |
+| Snap / Docker / LXD weird EACCES | Host profile on the runtime | `aa-status \| grep -E 'docker\|snap\|lxc'` |
+| Broke after `apt upgrade` | Vendor profile tightened | `debsums` / package changelog; `diff` against local |
+| Parser fails on reload | Syntax error in local include | `apparmor_parser -r` output; unmatched brackets |
+| Deny on `/proc/sys` or `capability net_admin` | Profile never allowed that cap | Do not add cap rules to “make it work” without a threat model |
+| Two profiles claim one binary | Override / disable symlink missing | `aa-status`; files in `apparmor.d/disable` |
 
 ## Investigation Tips
 
-- Always start with `aa-status` and recent kernel/journal messages containing “apparmor”.
-- Prefer `aa-complain` + `aa-logprof` over permanent disable when you need a service to work while you fix the profile.
-- Profiles are text files under `/etc/apparmor.d/`; they are more readable than SELinux policy modules but still easy to get wrong.
-- `#include` directives pull in abstractions (e.g. network, nameservice). Do not delete them casually.
-- After editing a profile, reload it with `apparmor_parser -r` or `systemctl reload apparmor`.
-- On systems that also have SELinux (rare on Ubuntu), confirm which MAC is actually enforcing.
+- Start with `aa-status` and one reproduction, then the kernel log line. The denied path and requested class (`r`, `w`, `m`, `net`, `capability`) are in that line.
+- Complain mode on *one* profile is the right debug hole. Stopping the AppArmor service is the wrong one.
+- Read the packaged profile before you generate a new one. You usually need one extra path, not a new policy language novel.
+- `#include <abstractions/nameservice>` and friends exist so you do not hand-write DNS/nss rules. Delete them and you invent mysterious resolver failures.
+- Reloading a profile does not restart the process. The running process may still carry the old attachment until exec. Restart the service after a meaningful change.
+- On dual-stack mental models: Ubuntu is AppArmor; RHEL is SELinux. Confirm with `aa-status` / `getenforce` before you paste the other OS’s runbook.
+- For containers, check whether the *runtime* is confined on the host. An unconfined `containerd` plus a tight service profile inside the guest are two different knobs.
 
 ## Related Notes
 
 - [[SELinux Deep Dive]]
 - [[Users Groups and Permissions]]
 - [[Auditing]]
-- [[SSH Hardening and Troubleshooting]]
+- [[Docker Operations]]
+- [[Web Server Troubleshooting]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
 
-> 
+- A MySQL data directory moved to `/data/mysql` “for disk space” survived Unix perms and mount options, then died on AppArmor. The packaged `usr.sbin.mysqld` profile still listed `/var/lib/mysql/**`. One local include and a restart; not `aa-disable`.
+- `aa-genprof` during an outage is how you get a profile that allows `/tmp/** w` and half of `/home`. Capture denials, add the three paths you actually need, reload, restart, re-test.
+- Snap-confined CLI tools failing to read a file under `/etc` looked like a umask bug for far too long. `cat /proc/PID/attr/current` would have said `snap.foo.foo` immediately.
+- Parser-reload without a service restart left us thinking the new rule “did nothing”. The worker processes were still running under the old loaded profile. Restart is part of the change.
