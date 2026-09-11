@@ -1,107 +1,103 @@
 # Pod Troubleshooting
 
-**Purpose**: Systematic approach to diagnosing Pod problems in Kubernetes.
+## Concept
 
----
+Pod troubleshooting is a **state machine problem**. Read the phase and container statuses first, then the Events, then logs. Most Pods fail in a small set of modes; jumping straight to `exec` wastes the signal Kubernetes already put in the API object.
 
-## 1. Quick Status
+## Why it matters
 
-```bash
-kubectl get pods -A -o wide
-kubectl get pods -n <namespace>
-kubectl describe pod <pod> -n <namespace>
+- Pods are where application, image, schedule, network, and storage failures surface
+- The same symptom ("not Ready") has different fixes depending on Pending vs ImagePull vs CrashLoop vs probe failure
+- Guessing produces `kubectl delete pod` loops that destroy evidence (`--previous` logs, Events)
+- A reliable order of operations turns 30-minute flails into 5-minute diagnoses
+
+## Mental Model
+
+```
+Phase / STATUS column
+    → Events (why the controllers / kubelet did what they did)
+        → Container status (waiting reason, exit code, restart count)
+            → Logs (--previous if crashing)
+                → describe node / image / mounts / probes
 ```
 
-Look at:
-- STATUS column (Pending, Running, CrashLoopBackOff, ImagePullBackOff, Error, Completed…)
-- READY column (e.g. 0/1, 1/2)
-- Events at the bottom of `describe`
+Container states that matter:
 
----
+- **Waiting** — ImagePullBackOff, CreateContainerConfigError, CrashLoopBackOff (between restarts)
+- **Running** — started; may still be unready
+- **Terminated** — exit code, reason (OOMKilled, Error, Completed)
 
-## 2. Common Pod States & What They Mean
-
-| State                | Meaning                                      | First actions                          |
-|----------------------|----------------------------------------------|----------------------------------------|
-| Pending              | Not scheduled yet                            | `describe` → Events (resources, taints, affinity) |
-| ContainerCreating    | Runtime is starting the container            | Usually transient; check if stuck      |
-| Running              | Containers started                           | Check READY and application health     |
-| CrashLoopBackOff     | Container keeps crashing                     | Logs + `describe`                      |
-| ImagePullBackOff     | Cannot pull image                            | Image name, registry auth, network     |
-| Error / Completed    | Container exited                             | Exit code + logs                       |
-| OOMKilled            | Container exceeded memory limit              | Limits + application memory usage      |
-
----
-
-## 3. Investigation Steps
-
-### 3.1 Events and description
+## Key Commands
 
 ```bash
+# Picture
+kubectl get pods -n <ns> -o wide
+kubectl get pods -n <ns> -w
+
+# Source of truth
 kubectl describe pod <pod> -n <ns>
-```
+kubectl get pod <pod> -n <ns> -o yaml
 
-Events section is often the fastest source of truth.
+# Logs
+kubectl logs <pod> -n <ns> -c <container>
+kubectl logs <pod> -n <ns> -c <container> --previous
+kubectl logs <pod> -n <ns> --all-containers --tail=100
 
-### 3.2 Logs
+# Events in the namespace (not only on the pod object)
+kubectl get events -n <ns> --sort-by='.lastTimestamp'
 
-```bash
-kubectl logs <pod> -n <ns>
-kubectl logs <pod> -n <ns> -c <container>          # multi-container
-kubectl logs <pod> -n <ns> --previous              # previous crashed container
-kubectl logs <pod> -n <ns> -f                      # follow
-```
-
-### 3.3 Resource usage and limits
-
-```bash
+# Resources
 kubectl top pod <pod> -n <ns>
-kubectl describe pod <pod> -n <ns> | grep -A5 -E 'Limits|Requests'
+kubectl describe pod <pod> -n <ns> | grep -A6 -E 'Limits|Requests|Conditions'
+
+# Exec only after the above
+kubectl exec -it <pod> -n <ns> -c <container> -- /bin/sh
 ```
 
-### 3.4 Shell into the container (when running)
+## Common States & What To Do
 
-```bash
-kubectl exec -it <pod> -n <ns> -- /bin/sh
-```
+| State | Meaning | First actions |
+|-------|---------|---------------|
+| Pending | Not scheduled | Events: FailedScheduling — CPU/mem, taints, affinity, PVC |
+| ContainerCreating | Sandbox / mounts / image pull in progress | Stuck? describe + CSI/CNI pods |
+| ImagePullBackOff | Cannot pull | Image name/tag, imagePullSecrets, registry network, node credentials |
+| CrashLoopBackOff | Process exits repeatedly | `logs --previous`; exit code; command/args; config |
+| CreateContainerConfigError | Bad secret/configmap reference | describe Events; missing key |
+| Running but 0/1 Ready | Readiness probe failing or slow start | Probe path/port; app listen address; `logs` |
+| OOMKilled | cgroup memory limit | Limits vs working set; leak vs undersized limit |
+| Error / Completed | Terminated | Exit code; Job vs long-running Deploy |
+| Evicted | Node pressure | `describe node`; disk/inodes/memory pressure |
 
----
-
-## 4. Decision Flow (simplified)
+## Decision Flow
 
 ```
 Pending?
-  → describe → look for FailedScheduling, insufficient CPU/memory, taints, affinity
+  └─ describe → FailedScheduling → capacity, taints, affinity, PVC unbound
 
 ImagePullBackOff?
-  → image name, tag, registry credentials, network to registry
+  └─ Events → image string, pull secret, registry reachability from *node*
 
 CrashLoopBackOff / Error?
-  → logs --previous, describe, check probes, config, permissions
+  └─ logs --previous → exit code → bad config vs app bug vs missing dependency
+  └─ check liveness probe killing the container on slow start
 
-Running but not Ready?
-  → readiness probe failing, application not listening yet
+Running, not Ready?
+  └─ readiness probe, Service selectors, app still binding
 
-OOMKilled?
-  → memory limits too low or application leak
+Running, Ready, traffic fails?
+  └─ leave this note → [[Services DNS and Ingress]] and NetworkPolicy
 ```
 
----
+## Investigation Tips
 
-## 5. Useful Extra Commands
-
-```bash
-# All events in a namespace
-kubectl get events -n <ns> --sort-by='.lastTimestamp'
-
-# Watch pods
-kubectl get pods -n <ns> -w
-
-# YAML of the running pod
-kubectl get pod <pod> -n <ns> -o yaml
-```
-
----
+- **Events first.** The bottom of `kubectl describe pod` is often the entire answer.
+- Keep `--previous` logs before you delete the Pod. CrashLoop evidence dies with the container.
+- Exit code 137 often means SIGKILL (OOM or forced kill); 143 SIGTERM; 1 generic app error. Confirm with reason in container status.
+- Liveness probes that are too tight turn slow starts into CrashLoops. If logs look healthy and restarts climb, read the probe.
+- ImagePullBackOff on *one* node only → node-specific credentials or egress. On all nodes → name, tag, or registry policy.
+- Pending with an unbound PVC is a storage problem, not a scheduler CPU problem. Check PVC/PV before adding nodes.
+- `kubectl debug` / ephemeral containers help when the image has no shell; still collect describe+logs first.
+- Compare a healthy Pod YAML to a bad one (`diff <(kubectl get pod … -o yaml)`). Drift in probes, mounts, and env is common after partial rollouts.
 
 ## Related Notes
 
@@ -109,10 +105,12 @@ kubectl get pod <pod> -n <ns> -o yaml
 - [[Resource Requests and Limits]]
 - [[Services DNS and Ingress]]
 - [[Container Internals]]
+- [[Persistent Storage]]
 - [[Troubleshooting Methodology]]
-
----
 
 ## Personal Lessons Learned
 
-> 
+- I deleted CrashLoop pods to "start clean" and lost `--previous` logs that showed a bad migration on boot. Describe and logs before delete, always.
+- A readiness probe on `/healthz` against the admin port while the app listened only on `:8080` produced Running 0/1 forever with clean app logs. Probe config is part of the app contract.
+- ImagePullBackOff with a private registry was "fine on my laptop" because my laptop had `docker login`. Nodes need imagePullSecrets or node-level credentials; the error is not subtle once you look at Events.
+- OOMKilled at 256Mi on a Java service was not a leak; it was a heap set to 512Mi. Limits must exceed the process's own configured heap plus overhead.

@@ -2,87 +2,106 @@
 
 ## Concept
 
-A container is **not** a lightweight VM.  
-It is a regular Linux process (or group of processes) isolated using kernel features:
+A container is **not** a lightweight VM. It is one or more ordinary Linux processes isolated by kernel features and given a private root filesystem view:
 
-- **Namespaces** – isolate what the process can see (PID, network, mount, UTS, IPC, user…)
-- **cgroups** – limit and account for resources (CPU, memory, I/O…)
-- **Union / overlay filesystems** – give the appearance of a private root filesystem
+- **Namespaces** — what the process can *see* (PID, net, mnt, UTS, IPC, user, cgroup)
+- **cgroups** — what the process can *use* (CPU, memory, PIDs, I/O)
+- **Union / overlay filesystem** — layered image + thin writable layer that looks like a private `/`
+
+From inside: "I am a small machine." From the host: "These are processes with special `/proc/<pid>/ns` and cgroup membership."
 
 ## Why it matters
 
-Understanding the underlying mechanisms helps when:
-- Debugging “why can this container see X?”
-- Investigating resource limits and OOM kills
-- Working with network or storage problems inside containers
-- Moving between Docker, containerd, Podman, and Kubernetes
+- Most "container mysteries" are namespace, cgroup, or overlay problems wearing a Docker/K8s costume
+- OOMKilled, "permission denied" on bind mounts, wrong DNS, and "no space left" inside a container are all explainable from these three mechanisms
+- The same model applies to Docker, containerd, Podman, and Kubernetes — only the control plane that *sets* the namespaces and cgroups changes
+- If you only know `docker run` flags, you cannot debug the cases where the runtime is healthy and the kernel is enforcing something you did not expect
 
 ## Mental Model
 
 ```
-Host Kernel
-├── Namespaces (isolation of view)
-├── cgroups (resource limits)
-└── Process(es) with a private rootfs (overlay)
+Host kernel (one)
+├── Namespaces          isolation of view
+│     PID, net, mnt, UTS, IPC, user, cgroup
+├── cgroups             limits + accounting
+│     memory, cpu, pids, io, ...
+└── Processes
+      private rootfs via OverlayFS (lower image layers + upper writable layer)
 ```
 
-From the inside, a container looks like its own small system.  
-From the host, it is just processes with special settings.
+Important consequences:
 
-## Key Concepts
+- Same kernel, same system call table, same vulnerabilities class as the host
+- `pid 1` *inside* the container is not host pid 1; signal handling and zombie reaping still matter
+- Network namespace has its own interfaces, routes, and `/etc/resolv.conf` (unless hostNetwork)
+- User namespace maps container UID 0 to an unprivileged host UID when enabled — file ownership on bind mounts becomes non-obvious
 
-| Feature        | Purpose                                      |
-|----------------|----------------------------------------------|
-| PID namespace  | Isolated process tree                        |
-| Network namespace | Isolated network stack (interfaces, routes) |
-| Mount namespace | Private filesystem mount table               |
-| User namespace  | Map container UIDs to different host UIDs    |
-| cgroups        | CPU / memory / I/O limits and accounting     |
-| OverlayFS      | Layered filesystem for images                |
-
-## Useful Host Commands
+## Key Concepts & Host Commands
 
 ```bash
-# See namespaces of a process
+# Namespaces visible on the host
 lsns
 ls -l /proc/<PID>/ns
+nsenter -t <PID> -n -p -m -- bash     # enter net/pid/mnt of a container process
 
-# cgroup information
+# cgroup membership and limits (v2 example paths vary by distro)
 cat /proc/<PID>/cgroup
+cat /sys/fs/cgroup/system.slice/docker-<id>.scope/memory.max
+cat /sys/fs/cgroup/system.slice/docker-<id>.scope/memory.current
 
-# What the container’s root looks like on the host (Docker example)
-docker inspect <container> | grep -i upperdir
+# Overlay components (Docker / containerd)
+docker inspect <container> --format '{{.GraphDriver.Data.UpperDir}}'
+# or find upperdir/lowerdir/workdir from mountinfo
+grep -E 'overlay|upperdir' /proc/<PID>/mountinfo
 
-# Processes inside a container from the host
+# Process view
 docker top <container>
-# or
-ps aux | grep <container-process>
+ps -o pid,ppid,user,args -C <entrypoint>
+cat /proc/<PID>/status | grep -E 'NSpid|Uid|Gid|Cpus_allowed'
+
+# What does the container think its IP / routes are?
+nsenter -t <PID> -n -- ip addr
+nsenter -t <PID> -n -- ip route
+nsenter -t <PID> -n -- cat /etc/resolv.conf
 ```
+
+Image layers are read-only. All writes go to the upperdir (or to a volume/bind mount that bypasses the overlay). Filling the upperdir produces "No space left on device" even when the host disk still has space.
 
 ## Common Failure Modes & Symptoms
 
-| Symptom                              | Related internal concept           |
-|--------------------------------------|------------------------------------|
-| Process sees wrong network           | Network namespace                  |
-| Cannot write to expected paths       | Mount namespace / volumes / permissions |
-| OOMKilled                            | cgroup memory limit                |
-| Permission denied on files           | User namespace + file ownership    |
-| “No space left” inside container     | Overlay / writable layer full      |
+| Symptom | Internal cause | First checks |
+|---------|----------------|--------------|
+| OOMKilled | cgroup memory max hit | `kubectl describe` / `docker inspect` limits; `memory.current` vs `memory.max` |
+| Permission denied on bind mount | User namespace UID mapping vs host file owner | `ls -ln` on host; container `/proc/1/status` Uid |
+| Container cannot reach network | Wrong netns, NetworkPolicy, or host firewall | `nsenter -t PID -n -- ip route`; compare with host |
+| DNS works on host, fails in container | resolv.conf from runtime/CNI, not host | `cat` resolv.conf *inside* netns |
+| "No space left" inside container | Writable layer full, not host disk | `df` inside; upperdir size on host |
+| Process sees host PIDs / interfaces | hostPID / hostNetwork (or broken runtime) | `ls -l /proc/PID/ns` vs host init |
+| Slow mass file writes | Overlay + small files, or diskquota on upper | Check whether workload should use a volume |
+| Zombies pile up | Container pid 1 does not reap | Use tini/s6 or a proper entrypoint |
 
 ## Investigation Tips
 
-- When a container has network problems, check whether it is using the host network or its own network namespace.
-- Resource limits defined in Kubernetes or Docker end up as cgroup settings on the host.
-- Overlay filesystem issues can look like normal disk-full problems but are limited to the container’s writable layer.
+- Always identify the **host PID** of the container's main process first. Everything else (`nsenter`, cgroup files, mountinfo) keys off that.
+- Resource limits in Kubernetes (`resources.limits`) and Docker (`--memory`) become cgroup settings. If the runtime says Running but the app dies, read the cgroup and the kernel OOM log (`dmesg` / `journalctl -k`).
+- Bind mounts ignore the image's UID layout. Match ownership to the **mapped** container UID, or run with a known uid and document it.
+- `docker exec` / `kubectl exec` enter the namespaces; they do not prove what a *new* process started by the entrypoint would see. For boot-time failures, use logs and `nsenter` from the host.
+- Overlay is fine for code and temp files; it is a poor fit for databases and heavy write workloads — use volumes.
+- When moving between Docker and Kubernetes, assume the *isolation model* is the same and the *defaults* (network plugin, pid 1, securityContext) are not.
 
 ## Related Notes
 
 - [[Namespaces and cgroups]]
 - [[Docker Operations]]
+- [[Podman Operations]]
 - [[Kubernetes Architecture]]
 - [[Resource Requests and Limits]]
+- [[Pod Troubleshooting]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
 
-> 
+- The first time I saw "No space left on device" with `df -h` on the host showing 40% free, the writable layer was a few GB and full of core dumps. `docker inspect` upperdir + `du` on that path ended the mystery.
+- Bind-mounting a host directory owned by UID 1000 into a container that runs as UID 0 with user namespaces produced permission errors that looked like SELinux. It was the UID map. `ls -ln` on both sides is faster than guessing.
+- `hostNetwork: true` made a debugging pod "fix networking". It also shared the host's ports and resolv.conf and taught me to never leave that on in production manifests.
+- An app that trapped SIGTERM and relied on PID 1 reaping zombies worked in a VM and leaked zombies in a container until we added an init process. Pid 1 behaviour is part of the interface.
