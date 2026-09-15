@@ -2,93 +2,107 @@
 
 ## Concept
 
-Capacity planning is the continuous process of measuring demand, understanding saturation points, and ensuring enough headroom exists (or can be added in time) so that growth or spikes do not turn into outages.
+Capacity planning is measuring demand against known ceilings, watching the *rate* at which you approach those ceilings, and buying or reclaiming headroom *before* queueing turns into an incident.
+
+It is not “make the graphs look empty.” It is “know how many days of runway you have at peak, including the failure of one replica, including the lead time to get more.”
+
+CLI tools give you a point-in-time truth check. Trends live in the metrics system. Both are required.
 
 ## Why it matters
 
-- Resources do not scale infinitely; CPU, memory, disk, network, connection limits, and cloud quotas all have ceilings
-- Waiting until saturation to react produces emergencies and poor purchasing decisions
-- Lead time for hardware, quota increases, or architectural changes is often weeks; planning must account for that
-- Cost and reliability trade off; over-provisioning hides problems, under-provisioning causes incidents
-
-Capacity work is cheaper than firefighting, but only if trends are visible early.
+- CPU, RAM, disk, IOPS, NICs, FDs, DB connections, LB backends, and cloud quotas all have hard stops. The kernel will not negotiate.
+- Lead time is the hidden variable. A disk that fills in 11 days with a 14-day procurement cycle is already an incident, just scheduled.
+- Average utilisation lies. A fleet at 55% average and 94% at the weekly peak has no spare for a node loss.
+- Cost and reliability trade. Blind over-provisioning hides leaks; chronic under-provisioning trains the org to live in SEV-2.
+- Autoscaling is capacity planning with a robot. If the robot is slower than the spike, you still needed static headroom.
 
 ## Mental Model
 
 ```
-Demand  →  utilisation  →  saturation  →  queueing / errors
+Demand → utilisation → saturation → queues / errors / retries → worse demand
 
-Watch:
-  - Absolute usage (cores, GB, IOPS, connections)
-  - Rate of growth
-  - Headroom to known limits
-  - Time to provision more capacity
+utilisation = current / limit          (per resource, per failure domain)
+runway      = remaining / growth_rate  (use peak growth, not mean)
+N+1 test    = same demand on N-1 members
 
-Useful ratios:
-  utilisation = current / limit
-  days of runway = remaining headroom / daily growth
-
-Plan for:
-  organic growth, seasonal peaks, launch events, failure of one replica (N+1)
+Plan for, separately:
+  organic growth
+  seasonal / launch peaks
+  retry storms (errors create demand)
+  one replica / one AZ gone
+  lead time to add capacity
 ```
 
-A system at 70% average with a weekly peak of 95% and a 14-day lead time for new nodes is already late.
+A system at 70% daily average, 95% Friday peak, 14-day node lead time is late. Act on runway, not on “it has not broken yet.”
+
+Hard limits worth listing in one inventory:
+
+- Host: cores, RAM, disk inodes and bytes, NIC, `fs.file-max`
+- Process: `ulimit -n`, app pool size, JVM heap
+- Data plane: DB `max_connections`, Redis clients, LB backend slots
+- Control plane: API rate limits, cloud vCPU / IP / disk quotas, certificate SANs
 
 ## Key Commands
 
 ```bash
-# Current resource snapshot
+# Snapshot (validate what dashboards claim)
 uptime
-free -h
-df -h
 nproc
-
-# Trends (if sysstat / sar available)
-sar -u 1 5          # CPU
-sar -r 1 5          # memory
-sar -d 1 5          # disk
-sar -n DEV 1 5      # network
-
-# Process-level consumers
-top -b -n 1 -o %CPU | head -20
-pidstat 1 5
-
-# Connection / file descriptor pressure
+free -h
+df -hT
+df -i
 ss -s
 cat /proc/sys/fs/file-nr
-ulimit -n
 
-# Container / cgroup limits (when relevant)
+# sysstat history if it exists — this is the poor-man trend
+sar -u 1 5
+sar -r 1 5
+sar -d 1 5
+sar -n DEV 1 5
+sar -q               # run queue / load
+
+# Who is actually consuming
+top -b -n 1 -o %CPU | head -25
+pidstat -urd 1 3
+
+# cgroup ceilings (containers / systemd slices)
 cat /sys/fs/cgroup/cpu.max 2>/dev/null
 cat /sys/fs/cgroup/memory.max 2>/dev/null
+systemctl show <unit> -p CPUQuota -p MemoryMax -p TasksMax
 
-# Cloud quotas (tool-specific)
-# aws service-quotas ..., gcloud compute regions describe, etc.
+# Connection / listen pressure
+ss -lntup
+ss -tan state syn-recv | wc -l
+
+# Growth of a filesystem (compare to last week’s ticket paste)
+df -B1 /var | tail -1
 ```
 
-Long-term trends belong in metrics systems (Prometheus, CloudWatch, etc.); CLI tools are for point-in-time and validation.
+Long-term answers come from Prometheus/CloudWatch/etc.: p95 and max over 30/90 days, not a single `top`.
 
 ## Common Failure Modes & Symptoms
 
-| Symptom                                      | Likely capacity issue                             | First checks                                      |
-|----------------------------------------------|---------------------------------------------------|---------------------------------------------------|
-| Latency climbs under load, CPU high          | CPU saturation                                    | `top`, load average vs core count                 |
-| OOM kills, swapping                          | Memory undersized or leak                         | `free`, OOM logs, growth of RSS                   |
-| High iowait, slow writes                     | Disk IOPS/throughput ceiling                      | `iostat`, queue depth, device limits              |
-| “Too many open files” / connection refused   | FD or connection limit                            | `ss -s`, ulimits, app pool size                   |
-| New instances cannot launch                  | Cloud quota or IP space exhausted                 | Quota dashboards, subnet free IPs                 |
-| One replica fails and the rest fall over     | No N+1 headroom                                   | Utilisation with one member removed               |
-| Sudden traffic spike causes outage           | No burst capacity or autoscaling lag              | Peak vs provisioned; autoscaler history           |
+| Symptom | Likely capacity issue | First checks |
+|---------|----------------------|--------------|
+| Latency climbs, CPU high | CPU saturation or throttle | `top` + `1` for per-CPU; cgroup `cpu.stat` throttled |
+| OOM / swap `si/so` | RAM undersized or leak | `free`, RSS over days, OOM in journal |
+| High `%wa`, write stalls | IOPS / throughput ceiling | `iostat -xz 1`, volume IOPS limit |
+| `too many open files` / refused | FD or accept queue | `ss -s`, ulimits, somaxconn |
+| Cannot launch instances | Quota, IP space, or SKU | Cloud quota page, subnet free IPs |
+| One replica dies, the rest melt | No N+1 | Model peak / (N-1) |
+| Spike outage despite autoscale | Cold start / scale lag | Autoscale history vs spike duration |
+| Disk “fine” last month, full now | Growth or a leak (logs, core dumps) | `du` offenders vs `df` trend |
+| Next layer dies after you scale this one | You moved the bottleneck | Re-measure the whole path |
 
 ## Investigation Tips
 
-- Track both average and peak. Decisions based only on averages fail at the worst time.
-- Include the “one less” scenario: if a node or AZ disappears, do the remainder stay under safe utilisation?
-- Set alerting on runway (e.g. “disk full in < 14 days at current growth”) not only on hard thresholds.
-- Separate organic growth from leaks or inefficiency; fixing a leak is often cheaper than buying more RAM.
-- Document known hard limits (DB max connections, LB backend limits, API rate limits) in one place.
-- When adding capacity, verify the bottleneck actually moved; sometimes the next layer saturates immediately.
-- Review capacity after major incidents and before large launches or marketing events.
+- Always record *peak* and *N+1*, not only 24h average.
+- Alert on runway (“full in < 14 days at current peak growth”), not only on 90% used. 90% of a 20 TB volume is a different emergency than 90% of 8 GB.
+- Separate “we got popular” from “we leak.” A leak you buy RAM for will be back in a quarter.
+- After adding capacity, verify the bottleneck moved. Scaling web nodes into a saturated DB makes things worse.
+- Include non-host limits in the same review: cert expiry batch, NAT ports, API rate limits, license seats.
+- Review capacity after every saturation incident and before every launch. That is the whole process.
+- In cloud, reserved + burst is not the same as dedicated IOPS. Burst credits empty at the worst time.
 
 ## Related Notes
 
@@ -99,8 +113,11 @@ Long-term trends belong in metrics systems (Prometheus, CloudWatch, etc.); CLI t
 - [[High CPU Runbook]]
 - [[Change Management]]
 - [[Incident Management]]
+- [[Alert Design]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
 
-> 
+- We once “had 40% CPU headroom” on a 12-node pool. Losing one AZ took four nodes. Friday peak on eight nodes was 96%. The outage was a maths problem we refused to write down.
+- Disk-full-in-N-days is the only disk alert I still trust. Percent-used on mixed volume sizes pages you late on the small volumes and nags you early on the large ones.
+- The cheapest capacity I ever added was deleting 800 GB of rotated logs that `copytruncate` had abandoned. Measure waste before you buy.

@@ -2,86 +2,101 @@
 
 ## Concept
 
-High Availability (HA) is the design and operational practice of keeping a service running through the failure of individual components (hosts, processes, disks, network paths) by using redundancy, health checks, and automated or rapid failover.
+High availability is the practice of surviving the failure of a *component* — process, disk, NIC, host, or path — without a user-visible outage, using redundancy, honest health checks, and failover that has been tested.
+
+HA is not “we bought two servers.” Two servers with untested failover, drifted config, and a VIP that nobody can explain is a more expensive single point of failure.
+
+HA covers component loss. Site or region loss is [[Disaster Recovery]]. Bad deploys and data corruption are [[Change Management]] and [[Backup Strategy]]. Do not ask HA to do those jobs.
 
 ## Why it matters
 
-- Single points of failure turn routine hardware or process crashes into full outages
-- Redundancy without correct failure detection still produces downtime (or split-brain)
-- Clients and operators need predictable behaviour when a node disappears
-- HA is cheaper than full DR for common failures, but it does not replace DR for site/region loss
-
-“We have two servers” is not HA until failover is reliable, tested, and understood.
+- Hardware and processes die. That should be boring.
+- Redundancy without detection still produces downtime. Redundancy without fencing produces split-brain, which is worse than downtime.
+- Clients cache. DNS TTLs, LB membership, and connection pools decide whether failover is 2 seconds or 20 minutes.
+- False-positive health checks flap a healthy service into an outage you caused.
+- Standby that was never promoted in anger will not promote cleanly during an incident. Testing is part of the design.
 
 ## Mental Model
 
 ```
-HA building blocks:
-  Redundancy     → multiple instances of the critical component
-  Health checks  → decide when a member is unfit
-  Failover       → move traffic or role to a healthy member
-  State          → shared, replicated, or carefully partitioned data
-  Quorum         → avoid split-brain when the cluster partitions
+Redundancy     — more than one of the thing that breaks
+Health check   — a probe that matches user-visible health
+Failover       — traffic or role moves to a healthy member
+State          — shared, replicated, or partitioned on purpose
+Quorum/fencing — when the network splits, at most one side writes
 
-Common patterns:
-  Active/passive   → one primary, standby takes over
-  Active/active    → multiple primaries sharing load
-  Load balancer + N backends
-  Database primary + replicas (with promotion)
-  Floating IP / VIP + keepalived / Pacemaker
+Patterns:
+  Active/passive + VIP (keepalived, Pacemaker)
+  Active/active behind a load balancer
+  DB primary + replicas with a promotion story
+  Multi-AZ stateless pool + managed data service
 ```
 
-The hard parts are state, split-brain, and false positives from flappy health checks.
+The hard parts are always: **state**, **split-brain**, and **lying health checks**.
+
+Ask, for every pair you own:
+
+1. What dies?
+2. Who notices, and in how many seconds?
+3. Who stops the dead side from writing?
+4. Where do clients go next, and what do they cache?
+5. What is the observed RTO from the last real test?
 
 ## Key Commands
 
+Tooling varies. The questions do not. Keep the exact check and the exact failover command next to the service.
+
 ```bash
-# Process and unit health
+# Local unit health is necessary, not sufficient
 systemctl status <service>
-systemctl list-units --failed
+systemctl --failed
 
-# Cluster / membership examples (tool-specific)
-pcs status                    # Pacemaker
-corosync-quorumtool -s
+# VIP / address ownership
+ip -br addr
+ip -d addr show dev eth0
+
+# keepalived / Pacemaker / corosync sketches
 keepalived -t -f /etc/keepalived/keepalived.conf
-ip -br addr                   # check VIP presence
+journalctl -u keepalived -n 80 --no-pager
+pcs status
+corosync-quorumtool -s
+stonith_admin -l
 
-# Load balancer / backend health (examples)
-curl -sI http://backend:port/healthz
-ss -lntp | grep :443
+# Did the client-facing path move?
+curl -sI --max-time 3 http://127.0.0.1/healthz
+curl -sI --max-time 3 http://<vip>/healthz
+ss -lntp | grep -E ':80|:443'
 
-# Database replication / lag (examples)
-# PostgreSQL: SELECT * FROM pg_stat_replication;
-# MySQL: SHOW REPLICA STATUS\G
+# Replication lag is part of HA, not a DB curiosity
+# PostgreSQL:  SELECT client_addr, state, replay_lag FROM pg_stat_replication;
+# MySQL:       SHOW REPLICA STATUS\G
 
-# Kernel / network path basics during failover
-ip route
-ping -c 3 <peer>
-journalctl -u keepalived -u corosync -u pacemaker -n 50 --no-pager
+# After a failover, prove both sides agree who is primary
+hostname; ip -br addr; systemctl is-active <service>
 ```
-
-Know the exact health-check endpoint and failover trigger for every HA pair you own.
 
 ## Common Failure Modes & Symptoms
 
-| Symptom                                      | Likely cause                                      | First checks                                      |
-|----------------------------------------------|---------------------------------------------------|---------------------------------------------------|
-| Both nodes think they are primary            | Split-brain; lost quorum or fencing               | Quorum status, fencing logs, data divergence      |
-| Failover never happens                       | Health check too weak or VIP stuck                | Health endpoint, keepalived/Pacemaker logs        |
-| Failover flaps                               | Flappy check, network blips, resource pressure    | Check thresholds, history of events               |
-| Service up but clients still fail            | DNS / LB still pointing at dead node              | VIP, LB pool, client caches                       |
-| Standby cannot take over                     | Config drift, missing packages, unreplicated state| Compare configs, test promotion on schedule       |
-| HA works for process crash, not host crash   | No fencing or shared storage not handled          | Simulate host power-off in a maintenance window   |
+| Symptom | Likely cause | First checks |
+|---------|--------------|--------------|
+| Two primaries | Lost quorum / fencing disabled / network partition | Quorum tool, STONITH history, data divergence |
+| Failover never fires | Check too weak, VIP stuck, split DNS | Health URL from *outside*, `ip addr` on both |
+| Failover flaps | Tight check + packet loss or GC pause | Raise interval/threshold; fix the real slowness |
+| Service “up”, clients fail | LB/DNS/conn pool still on the corpse | Pool members, TTL, client keepalive |
+| Standby cannot take over | Config drift, missing package, unreplicated state | Diff config, last successful promotion test |
+| Works for `kill`, not for power-off | No fencing / shared disk not released | Schedule a hard-off test |
+| Split-brain writes | Two writers, one dataset | Fence first, restore from backup if divergent |
+| HA “fine”, deploy takes both sides down | Shared change, no bake time | [[Change Management]] — HA does not save you |
 
 ## Investigation Tips
 
-- Always ask: what is the single point of failure left? (VIP host, shared disk, license server, external DNS.)
-- Prefer automatic failover for well-understood failure modes; require human confirmation for ambiguous ones if the cost of wrong promotion is high.
-- Test failover regularly (process kill, network partition, host reboot). Document the observed RTO.
-- Fencing (STONITH) exists to prevent split-brain; never disable it “to make the cluster start”.
-- Health checks should reflect user-visible health, not only “process is running”.
-- Keep standby configuration in sync with primary via automation; manual drift is the usual reason standby fails when needed.
-- HA does not protect against bad deploys or data corruption — that is change management, backups, and DR.
+- Draw the remaining single points: VIP host, shared LUN, license server, external DNS, one NAT gateway.
+- Health checks must exercise the user path (query the DB, touch the disk). `pidof myservice` is how you fail over too late or not at all.
+- Prefer automatic failover when the failure mode is crisp (process dead, peer gone). Prefer human confirmation when promotion can lose data.
+- Never disable STONITH “so the cluster starts.” That is how you get two writers.
+- Keep standby config in the same automation as primary. Drift is the usual reason standby fails.
+- Test three things on a calendar: process kill, network partition, host power-off. Write down the observed RTO.
+- After failover, do not forget to *fail back* on purpose later, or the next incident starts from the wrong node with the wrong disk.
 
 ## Related Notes
 
@@ -90,9 +105,12 @@ Know the exact health-check endpoint and failover trigger for every HA pair you 
 - [[Capacity Planning]]
 - [[Incident Management]]
 - [[Change Management]]
-- [[Load balancing concepts in Services DNS and Ingress]]
+- [[Services DNS and Ingress]]
+- [[Restore Testing]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
 
-> 
+- keepalived was “working” for a year because nobody pulled the primary NIC. The first real host crash left the VIP on a dead machine; VRRP was bound to an interface that never went away in software. Test power-off, not only `systemctl stop`.
+- We disabled fencing once to recover a lab cluster and the habit leaked to prod. Split-brain cost more than the outage we were trying to shorten. Fence, then restore.
+- A health check that only hit `/` on the local proxy declared the node healthy while the database behind it was gone. Clients failed; the pool did not shrink. Probe what the user needs, not what is convenient to curl.
