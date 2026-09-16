@@ -2,89 +2,106 @@
 
 ## Concept
 
-On Debian-family systems (Debian, Ubuntu, derivatives):
+On Debian-family systems:
 
-- **dpkg** is the low-level package manager (installs/removes `.deb` files, tracks database)
-- **APT** (`apt`, `apt-get`, `apt-cache`) is the higher-level tool that resolves dependencies, talks to repositories, and calls dpkg
+- **dpkg** is the low-level installer. It unpacks `.deb` files, runs maintainer scripts, and owns `/var/lib/dpkg`.
+- **APT** (`apt`, `apt-get`, `apt-cache`) resolves dependencies, talks to repositories, downloads packages, and then calls dpkg.
 
-Understanding both layers is required when upgrades break or the package database becomes inconsistent.
+When an upgrade "breaks the box", you are almost always looking at one of: interrupted dpkg, a failed maintainer script, a pin/hold, or a bad repository/key — not a mysterious apt bug.
 
 ## Why it matters
 
-- Broken packages, held packages, and partial upgrades are common sources of “service won’t start after update”
-- Repository misconfiguration or GPG/key problems block all further changes
-- Mixing `apt` and manual `dpkg -i` without care can leave the system in a half-configured state
+- A half-configured package blocks *every* later apt transaction
+- Held or phased packages silently skip security fixes
+- Mixing `dpkg -i`, third-party repos, and unattended-upgrades without pinning produces undebuggable version skew
+- Service outages after patching are often `postinst` restarting something, or a conffile prompt that was skipped in a non-interactive run
 
 ## Mental Model
 
 ```
-Repositories (sources.list + .list files)
-        ↓
-APT cache / dependency solver
-        ↓
-dpkg database (/var/lib/dpkg)
-        ↓
-Files on disk + maintainer scripts (preinst, postinst, …)
+/etc/apt/sources.list{,.d}  +  preferences / pinning
+        → apt update  (Packages / Release / signatures)
+        → solver (depends, breaks, conflicts, holds)
+        → download into /var/cache/apt/archives
+        → dpkg unpack + configure
+                preinst → unpack files → postinst
+                prerm   → remove files → postrm
+        → triggers (man-db, initramfs, systemd daemon-reload)
 ```
 
-APT decides *what* to install; dpkg performs the actual unpack and configuration.
+APT decides *what*. dpkg changes *the disk*. Maintainer scripts are ordinary shell and can fail for ordinary reasons (port in use, missing user, timeout).
+
+Package state in `dpkg -l` first column pair: `ii` installed, `iU` unpacked not configured, `iF` failed-config, `rc` removed but conffiles left.
 
 ## Key Commands
 
 ```bash
-# Update index and upgrade
+# Index and upgrade
 apt update
-apt upgrade                 # safe, no new pkgs / removals
+apt upgrade                 # no new pkgs, no removals
 apt full-upgrade            # may remove packages to satisfy deps
 
-# Search and show
+# Search / policy
 apt search <name>
 apt show <pkg>
-apt policy <pkg>            # candidate version and origins
+apt policy <pkg>            # candidate, pin, origin
+apt-cache madison <pkg>     # all known versions
 
 # Install / remove
 apt install <pkg>
-apt remove <pkg>            # leaves config
-apt purge <pkg>             # removes config too
-apt autoremove              # unused dependencies
+apt install <pkg>=<version>
+apt remove <pkg>            # keeps conffiles
+apt purge <pkg>             # drops conffiles too
+apt autoremove --purge
 
-# dpkg level
-dpkg -l | grep <pkg>        # list installed
-dpkg -L <pkg>               # files owned by package
-dpkg -S /path/to/file       # which package owns this file
-dpkg --configure -a         # finish interrupted configures
-dpkg -i package.deb         # install local deb (then apt -f install)
+# dpkg inspection
+dpkg -l '<pkg>*'
+dpkg -l | awk '/^.[^i]/ {print}'    # anything not fully installed
+dpkg -L <pkg>                       # files owned
+dpkg -S /path/to/file               # which package owns this
+dpkg -c package.deb                 # contents before install
 
-# Fix broken state
+# Recovery
+dpkg --configure -a
 apt --fix-broken install
-apt -f install
+apt-get -f install
 
-# Holds
+# Holds and pins
 apt-mark hold <pkg>
 apt-mark unhold <pkg>
 apt-mark showhold
+apt-config dump | grep -i unattended
+
+# History
+less /var/log/apt/history.log
+less /var/log/dpkg.log
+ls -lt /var/cache/apt/archives | head
 ```
 
-Prefer `apt` over raw `apt-get` for interactive use; scripts often still use `apt-get` for stability of output.
+Interactive work: `apt`. Scripts: `apt-get` with `-y` only when you have already solved the transaction in a change window.
 
 ## Common Failure Modes & Symptoms
 
-| Symptom                              | Likely cause                              | First checks                              |
-|--------------------------------------|-------------------------------------------|-------------------------------------------|
-| `dpkg was interrupted` / half-configured | Crash or kill during configure         | `dpkg --configure -a`                     |
-| Unmet dependencies                   | Partial upgrade or conflicting pkgs       | `apt --fix-broken install`               |
-| Hash sum mismatch / NO_PUBKEY        | Mirror or key problem                     | `apt update` output, `/etc/apt/sources*`  |
-| Package held back                    | Explicit hold or phasing                  | `apt-mark showhold`, `apt policy`         |
-| Service broken after upgrade         | Maintainer script or config change        | `apt changelog <pkg>`, journal, configs   |
-| “Unable to locate package”           | Wrong suite / component / arch            | `apt policy`, sources.list                |
+| Symptom | Likely cause | First checks |
+|---------|--------------|--------------|
+| `dpkg was interrupted` | Kill, full disk, session drop mid-configure | `df -h /var`; `dpkg --configure -a` |
+| Unmet dependencies / `held broken packages` | Partial upgrade, conflict, hold | `apt-mark showhold`; `apt policy` |
+| `NO_PUBKEY` / `EXPKEYSIG` / hash mismatch | Mirror, keyring, or MITM / stale cache | `apt update` full output; sources and keyrings |
+| Package kept back | Hold, phasing (Ubuntu), or new deps | `apt policy`, `apt full-upgrade --dry-run` |
+| Service dead after upgrade | `postinst` restart, conffile replaced | `dpkg.log`, `apt changelog`, journal |
+| `Unable to locate package` | Wrong suite, component, or arch | `apt policy`, `dpkg --print-architecture` |
+| `Could not get lock /var/lib/dpkg/lock` | Another apt/unattended-upgrades running | `lsof` the lock; `systemctl status unattended-upgrades` |
+| Conffile mess | Local edit vs maintainer version | `/etc` vs `.dpkg-dist` / `.dpkg-old` |
 
 ## Investigation Tips
 
-- After any failed `apt` run, read the full error — it usually names the conflicting package or the exact dpkg failure.
-- `apt policy <pkg>` quickly shows which version is candidate and from which repository.
-- When a package is “broken”, `dpkg -l | grep ^..r` (or similar) and `dpkg --configure -a` are the first recovery steps.
-- Avoid `apt full-upgrade` on production without a tested change window and rollback plan.
-- Keep `/etc/apt/sources.list` and files under `sources.list.d/` under configuration management.
+- Read the *first* dpkg error, not the last apt summary. The solver noise is downstream of one failed script.
+- `apt policy <pkg>` is the fastest way to see why a version is (or is not) a candidate.
+- After a failed run: `grep <pkg> /var/log/dpkg.log` and the matching block in `/var/log/apt/term.log`.
+- Disk full on `/var` is a common reason configure dies halfway. Check space before you loop `dpkg --configure -a`.
+- Ubuntu phased updates will "keep back" packages on some hosts. That is intentional; do not force them on prod during an incident unless you mean to.
+- Third-party repos belong in `sources.list.d/` with an explicit pin. A desktop PPA on a server is how you get a surprise libc.
+- Never `rm` files under `/var/lib/dpkg` to "unstick" it. That is how you get an unrecoverable database.
 
 ## Related Notes
 
@@ -92,8 +109,11 @@ Prefer `apt` over raw `apt-get` for interactive use; scripts often still use `ap
 - [[Repository Troubleshooting]]
 - [[Patching Strategy]]
 - [[Major Version Upgrades]]
+- [[Change Management]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
 
-> 
+> An unattended-upgrades run and a manual `apt full-upgrade` contended for the dpkg lock; the manual session was killed mid-postinst. The package sat in `iF` and blocked patching for two days. Check locks and `dpkg -l` for non-`ii` states before you start a change window.
+>
+> I have spent longer on a "missing package" than on the outage it caused. `apt policy` showed we were on the wrong component (`main` without `universe` / wrong suite). Confirm origin before you rebuild mirrors.
