@@ -2,96 +2,99 @@
 
 ## Concept
 
-`journalctl` queries the systemd journal — the structured log store used by systemd-managed systems. It replaces much of the traditional “grep /var/log” workflow with filters by unit, time, priority, and boot.
+`journalctl` is the query tool for the systemd journal: a structured, indexed log store. Filter by unit, time, boot, priority, PID, or executable instead of grepping a pile of text files.
+
+This page is the command card. Storage, persistence, vacuuming, and “why did last boot vanish?” live in [[journalctl Deep Dive]] and [[journald and Persistent Storage]].
 
 ## Why it matters
 
-- Almost every service under systemd writes here (and many still write to files as well)
-- Time-bounded and unit-bounded queries are far faster and more precise than grepping flat files
-- Boot-scoped views (`-b`) make “what failed on last boot?” trivial
-- Essential companion to `systemctl status` when a unit is failed or flapping
+- `systemctl status` only shows a teaser. The rest is here
+- Time and unit filters beat `grep -R` on `/var/log` for anything systemd-managed
+- `-b -1` is the fastest “what died on the previous boot?” you will ever get
+- Priority and `_PID=` cut noise when an incident has three overlapping services
 
-This note is a practical command reference; see [[journalctl Deep Dive]] for storage, vacuuming, and architecture.
+Default output is current boot, oldest first, all priorities. That is the wrong window for almost every incident.
 
 ## Mental Model
 
 ```
-journal = structured binary log
+journal records
+  _SYSTEMD_UNIT=  /  SYSLOG_IDENTIFIER=
+  PRIORITY=       0 emerg … 7 debug
+  __REALTIME_TIMESTAMP=
+  _BOOT_ID=
+  _PID=  _COMM=  _EXE=
 
-Filter dimensions:
-  - time window (--since / --until / -b)
-  - unit (-u)
-  - priority (-p)
-  - field (e.g. _PID=, SYSLOG_IDENTIFIER=)
-  - boot (-b, -b -1 for previous)
-
-Output can be followed (-f), limited (-n), or exported.
+You almost always constrain THREE things:
+  who   (-u, _PID=, path-to-binary)
+  when  (--since / --until / -b)
+  how bad (-p)
 ```
 
-Default is the current boot, all priorities, oldest first. Always narrow the window for incidents.
+`-p err` means err *and worse*, not “only err”.
 
 ## Key Commands
 
 ```bash
-# Current boot, errors and above
-journalctl -b -p err
+# Failed units this boot, then their logs
+systemctl --failed
+journalctl -b -p err --no-pager
 
-# Specific unit
-journalctl -u nginx.service
-journalctl -u nginx.service -b
+# One unit, recent, follow
 journalctl -u nginx.service --since "1 hour ago"
+journalctl -u nginx.service -f
 
-# Follow (like tail -f)
-journalctl -u myapp -f
-
-# Previous boot
-journalctl -b -1
+# Previous boot vs this boot
+journalctl --list-boots
 journalctl -b -1 -p warning
+journalctl -b -u sshd
 
-# Time range
-journalctl --since "2026-08-27 08:00" --until "2026-08-27 09:00"
-journalctl --since "10 min ago"
+# Time box an incident
+journalctl --since "2026-09-18 07:40" --until "2026-09-18 08:10" -p info
+journalctl --since "10 min ago" -u myapp
 
-# Kernel messages
-journalctl -k
+# Kernel / OOM
 journalctl -k -b
+journalctl -b -p err | grep -iE 'oom|killed process|ext4|xfs|nvme|i/o error'
 
-# By PID or executable
+# By process or binary
 journalctl _PID=1234
-journalctl /usr/sbin/sshd
+journalctl /usr/sbin/sshd --since today
 
-# Reverse (newest first), limited lines
-journalctl -r -n 50
-journalctl -u sshd -n 100 --no-pager
+# Newest first, limited, script-friendly
+journalctl -u myapp -r -n 80 --no-pager
+journalctl -o short-iso -u myapp --since "-30min" --no-pager
+journalctl -o json-pretty -n 5 -u myapp
 
-# JSON / export for tooling
-journalctl -u myapp -o json-pretty
-journalctl -o short-iso
-
-# Disk usage and vacuum (careful)
+# Disk usage and trim (do this on purpose, not as muscle memory)
 journalctl --disk-usage
 journalctl --vacuum-size=500M
-journalctl --vacuum-time=7d
+journalctl --vacuum-time=14d
 ```
+
+Useful extra switches: `-x` (explanation text on some messages), `-o verbose` (see every field once so you know what you can filter on), `--utc`.
 
 ## Common Failure Modes & Symptoms
 
-| Need                                 | Useful journalctl invocation                 |
-|--------------------------------------|----------------------------------------------|
-| Why did this unit fail?              | `journalctl -u <unit> -b -p err`             |
-| What happened just before the crash? | `--since` around the incident + `-u`         |
-| Kernel / OOM / disk errors           | `journalctl -k -b` / `-p err`                |
-| Service was fine last boot, broken now | Compare `-b` vs `-b -1`                    |
-| Too much noise                       | Raise priority (`-p warning`), tighter time  |
-| Journal missing old data             | Persistence / size limits — see deep dive   |
+| Need | Invocation |
+|------|------------|
+| Why is this unit failed? | `journalctl -u UNIT -b -p err -x --no-pager` |
+| What happened just before the crash? | `--since` 10 min before the timestamp + `-u` |
+| Kernel / storage / OOM | `journalctl -k -b` and `-p err` |
+| “It worked last boot” | `--list-boots` then `-b -1` vs `-b` |
+| Flooded output | `-p warning`, tighter `--since`, drop `-f` until filtered |
+| Empty history after reboot | Journal not persistent — see persistence note |
+| Permission denied | Not in `systemd-journal` / `adm`; use root or fix groups |
+| Clock jump scrambled order | `--utc` and compare `timedatectl` |
 
 ## Investigation Tips
 
-- Always pin a time window for incidents; full-boot logs on a busy host are huge.
-- `systemctl status <unit>` already shows the last few journal lines — use `journalctl` when you need more history or filters.
-- Persistent journal requires `/var/log/journal` and correct config; otherwise logs vanish on reboot.
-- Priority levels: `emerg`, `alert`, `crit`, `err`, `warning`, `notice`, `info`, `debug`. `-p err` means “err and worse”.
-- Combine with `systemctl --failed` as the first pass on any unhealthy host.
+- Pin a time window first. A busy node’s current-boot journal is not a page you read linearly.
+- Start with `systemctl status UNIT -l --no-pager` then jump to `journalctl -u UNIT --since …`.
+- Compare `-b` and `-b -1` before you assume a config change “today” is the cause. Some units fail only on cold boot (network ordering, decrypt, DNS).
+- `-o verbose` once per incident type teaches you fields like `SYSLOG_IDENTIFIER` and `CODE_FUNC` that `-u` misses when a process logs under another name.
+- `journalctl -u UNIT -u UNIT2` merges streams on one timeline. Use that for proxy + app + database instead of three terminals.
+- Vacuuming is capacity management, not troubleshooting. Snapshot `--disk-usage` before you shrink anything during an incident.
 
 ## Related Notes
 
@@ -100,8 +103,11 @@ journalctl --vacuum-time=7d
 - [[systemctl Deep Dive]]
 - [[systemctl Command Reference]]
 - [[Logging Architecture]]
+- [[logrotate]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
 
-> 
+- I used to `journalctl -u foo` with no time bound and page for ten minutes. `--since "20 min ago" -p info` is the default I type now.
+- The “missing logs after reboot” incident was volatile journal on a cloud image. Persistence is a design choice, not a default you can assume.
+- Merging `-u nginx -u myapp` showed the 502 was the app crashing 200 ms before nginx logged it. Separate greps hid the order.
