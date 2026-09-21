@@ -2,107 +2,118 @@
 
 ## Concept
 
-RPM is the package format used by RHEL, Fedora, CentOS, AlmaLinux, Rocky, and related distributions. DNF (Dandified YUM) is the modern dependency resolver and repository manager that installs, updates, and removes RPM packages while handling dependencies and transaction history.
+RPM is the on-disk package format and local database used by RHEL, Fedora, Alma, Rocky, and cousins. DNF is the resolver that talks to repositories, computes a transaction, downloads artefacts, and hands them to RPM — including scriptlets.
+
+RPM answers “what files belong to this package and have they been altered?” DNF answers “what *should* be installed next, from where, and can I undo it?”
 
 ## Why it matters
 
-- Almost every change on a RHEL-family host goes through DNF/RPM
-- Broken dependencies, version locks, and bad repository configuration cause “cannot update” and runtime failures
-- Transaction history and downgrade capability are critical for safe rollbacks
-- Understanding local vs remote package state prevents surprise upgrades and missing security fixes
+- Almost every planned change on a RHEL-family host goes through DNF
+- “Cannot update” is usually repos, modules, versionlock, or a full `/var` — not a mysterious RPM bug
+- `dnf history` is the fastest rollback you will get without a snapshot
+- `rpm -V` is how you prove a packaged file was edited, replaced, or tampered with
+- Modular streams on EL8+ pin language runtimes and databases in ways that look like dependency hell if you ignore them
 
-Treat the package database as a source of truth for what should be on the system.
+Treat `/var/lib/rpm` plus enabled repos as the source of truth for what the box is *supposed* to be.
 
 ## Mental Model
 
 ```
-Repositories (baseurl / mirrorlist)
+.repo files / subscription
         ↓
-   DNF metadata cache
+  metadata cache  (/var/cache/dnf)
         ↓
-  Dependency solve → transaction
+  solver  →  transaction  (install / upgrade / erase)
         ↓
-   RPM database (/var/lib/rpm)
+  RPM database     (/var/lib/rpm)
         ↓
-  Files on disk + scriptlets (pre/post)
+  files + scriptlets (pre/post/%transfiletrigger)
 
-Key ideas:
-- RPM = single package artefact + database
-- DNF = solver + repo management + history
-- Module streams (AppStream) add extra version dimensions on EL8+
+RPM  = one artefact + the local database of files/owners/scripts
+DNF  = repos + depsolve + history + modules + plugins (versionlock)
 ```
 
-A successful `dnf install` both downloads packages and runs RPM scriptlets; failures can leave partial state that history can often undo.
+A “successful” `dnf install` that dies in a `%post` can leave the database and the filesystem disagreeing. `dnf history info <id>` is the reconstruction tool.
+
+On EL8/EL9, AppStream *module streams* add a second version axis. Enabling `postgresql:15` is a policy decision, not a one-off `dnf install`.
 
 ## Key Commands
 
 ```bash
-# Status and search
+# What is installed / what would change
+dnf list installed <pkg>
+dnf info <pkg>
 dnf check-update
-dnf search <keyword>
-dnf info <package>
-dnf list installed <package>
-rpm -qa | grep <name>
+dnf check-update --security
+rpm -q <pkg>
+rpm -qa | grep -i <name>
 
 # Install / remove / update
 dnf install <pkg>
 dnf remove <pkg>
-dnf update <pkg>          # or dnf upgrade
-dnf update                # all
+dnf upgrade <pkg>
+dnf upgrade                  # everything the solver will allow
 
-# History and rollback
+# History — read before you undo
 dnf history
 dnf history info <id>
 dnf history undo <id>
 dnf history rollback <id>
 
-# What provides a file or capability
+# Who owns this file / what files are in the package
 dnf provides /usr/bin/ss
 rpm -qf /usr/bin/ss
-rpm -ql <package>         # list files in package
-rpm -V <package>          # verify files against database
+rpm -ql <pkg>
+rpm -qc <pkg>                # packaged config files
+rpm -V <pkg>                 # verify against the database
 
-# Repositories
-dnf repolist
+# Repos and modules
 dnf repolist -v
-dnf config-manager --enable <repo>
-dnf config-manager --disable <repo>
+dnf repoinfo <id>
+dnf config-manager --enable <id>
+dnf config-manager --disable <id>
+dnf module list
+dnf module list <name>
 
-# Clean and rebuild cache
+# Pins
+dnf versionlock list
+dnf versionlock add <pkg>
+dnf versionlock delete <pkg>
+
+# Cache
 dnf clean all
 dnf makecache
 
-# Versionlock (plugin)
-dnf versionlock list
-dnf versionlock add <pkg>
-
-# Low-level RPM
-rpm -ivh pkg.rpm          # install local
-rpm -Uvh pkg.rpm          # upgrade
-rpm -e <pkg>              # erase
-rpm --import /etc/pki/rpm-gpg/... 
+# Local RPM when you must (prefer dnf even for a file)
+dnf install ./foo-1.2-3.el9.x86_64.rpm
+rpm -qp --scripts foo-1.2-3.el9.x86_64.rpm    # inspect scriptlets first
 ```
+
+`rpm -V` output letters: `S` size, `M` mode, `5` digest, `D` device, `L` symlink, `U` user, `G` group, `T` mtime, `P` capabilities. A `c` in the last column means “this is a config file” — drift there is often intentional.
 
 ## Common Failure Modes & Symptoms
 
-| Symptom                              | Typical cause                              | First checks                                      |
-|--------------------------------------|--------------------------------------------|---------------------------------------------------|
-| Dependency conflict / broken transaction | Conflicting packages or modular streams | `dnf check`, history, module list                 |
-| “No match for package”               | Repo disabled or wrong release             | `dnf repolist`, subscription / mirror config      |
-| GPG check failed                     | Missing or wrong key                       | `rpm --import`, repo gpgkey setting               |
-| Update blocked by versionlock        | Intentional pin                            | `dnf versionlock list`                            |
-| Files modified but package claims clean | Manual edits or attack                   | `rpm -V <pkg>`, compare with known good           |
-| Scriptlet failure mid-transaction    | Pre/post script error                      | `dnf history info`, logs under `/var/log`         |
-| Disk full during transaction         | Metadata + packages + scriptlets           | Free space on `/var` and `/usr` before large updates |
+| Symptom | Likely cause | First checks |
+|---------|--------------|--------------|
+| Dependency conflict / broken transaction | Mixed modules, third-party repo, leftover package | `dnf check`, `dnf module list`, `dnf history` |
+| `No match for argument` | Repo disabled, wrong releasever, subscription | `dnf repolist -v`, `/etc/os-release` |
+| GPG check failed | Missing/rotated key, wrong `gpgkey=` | repo file, `rpm -q gpg-pubkey` |
+| Update does nothing | versionlock, exclude=, modular pin, phasing N/A | `dnf versionlock list`, repo `exclude=` |
+| `rpm -V` screams after a “good” host | Local edits or an incomplete restore | decide: restore package file or own the override |
+| Scriptlet error mid-transaction | `%pre`/`%post` failed (user, path, selinux) | `dnf history info`, journal around that minute |
+| Disk full during transaction | Cache + packages + `/var` | `df -h /var /usr`; never continue half-full |
+| `rpmdb` errors | Interrupted transaction, crashed disk | `dnf check`, vendor `rpm --rebuilddb` *only* with a backup |
+| Two versions of a library after “upgrade” | Old package not erased; module reset needed | `rpm -q`, `dnf module reset` |
 
 ## Investigation Tips
 
-- Always check `dnf history` before and after significant changes; it is the fastest path to undo.
-- `rpm -V` is valuable after suspected tampering or accidental edits to packaged files.
-- On EL8/EL9, modular streams (`dnf module list`) can pin language runtimes and databases; conflicts often originate there.
-- Prefer `dnf` over raw `rpm -Uvh` when dependencies matter; use `rpm` for inspection and verification.
-- Keep `/var/cache/dnf` and `/var/lib/rpm` on filesystems with enough headroom; full disks break transactions badly.
-- For offline or air-gapped systems, `dnf download` + local repo or `createrepo` is the usual pattern.
+- Snapshot `dnf history` *before* a risky transaction so you know the id to undo.
+- Prefer `dnf install ./file.rpm` over raw `rpm -Uvh` whenever dependencies exist. Use `rpm` for query and verify.
+- `rpm -V` after an incident or a backup restore is cheap integrity. Ignore config-file drift you expect; do not ignore changed binaries.
+- On EL8/EL9, `dnf module list --enabled` belongs in the same breath as `dnf repolist`.
+- Keep headroom on `/var` and `/usr`. A full `/var/lib/rpm` or `/var/cache/dnf` turns a routine patch into a recovery drill.
+- `exclude=` in a `.repo` file and versionlock both hide updates. Search both when “the CVE package is not coming down”.
+- For air-gapped boxes: `dnf download --resolve` on a twin, then a local `file://` repo. Do not scp random RPMs onto production.
 
 ## Related Notes
 
@@ -110,8 +121,12 @@ rpm --import /etc/pki/rpm-gpg/...
 - [[Patching Strategy]]
 - [[Repository Troubleshooting]]
 - [[Major Version Upgrades]]
+- [[SELinux Deep Dive]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
 
-> 
+- I used to run `rpm -Uvh` from a vendor tarball “because DNF could not find it”. The next `dnf upgrade` then fought the unpackaged library for six months. If the file is an RPM, let DNF own the transaction.
+- `dnf history undo` saved a Friday when a third-party repo upgraded `openssl` out from under sshd. Knowing the transaction id *before* we started was the whole trick.
+- Versionlock on `kernel` looked smart until the next CVE. The lock file is part of the patching strategy, not a set-and-forget.
+- A host with a corrupted rpmdb after a power loss looked like “yum is broken”. The real sequence was: copy `/var/lib/rpm` aside, then rebuild. Running rebuild on the only copy is how you lose the database twice.
