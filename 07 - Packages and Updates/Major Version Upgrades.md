@@ -113,4 +113,7 @@ Prefer a blue/green host or a snapshot-backed clone over a heroic in-place upgra
 
 ## Personal Lessons Learned
 
-> 
+- The in-place upgrade that "succeeded" left sshd refusing our host-key algorithm. Console access was the only reason it was not a lockout. Identity path is the first post-reboot check, before you drop the out-of-band session.
+- `/boot` at 90% looked fine until the new kernel plus a failed initramfs filled it and GRUB had nothing sane to boot. Measure `/boot` in megabytes free, not vibes, and delete old kernels first.
+- A third-party monitoring agent repo still pointed at EL8 after an EL9 leapp run. `dnf` looked broken; it was just a stale `.repo` file. Rewrite or disable foreign repos before the upgrade, not after the 404s.
+- Rehearsing on a snapshot clone surfaced a Python 2 cron job and an unlabeled `/srv` tree. Both would have been a production surprise. The clone is the plan; the production host is the copy.

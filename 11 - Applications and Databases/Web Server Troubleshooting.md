@@ -116,4 +116,7 @@ ausearch -m avc -ts recent 2>/dev/null | tail
 
 ## Personal Lessons Learned
 
-> 
+- A fleet-wide 502 was php-fpm sockets owned by `root:root` after a package update reset `/run` permissions. nginx could not proxy; `nginx -t` was clean. Always curl the upstream, not only the edge.
+- `curl http://127.0.0.1` returned the default vhost while the public name 404'd. Missing `server_name` after a cert cutover. `nginx -T` plus `curl -H Host:` would have been two minutes, not an hour of TLS hunting.
+- Reloading after a bad `proxy_pass` left the old workers running. We thought the change "did nothing" until `nginx -t` showed the syntax error and `ps` showed two generations. Test, then reload, then confirm the new PID and a live request.
+- SELinux `httpd_sys_content_t` on a newly rsynced docroot produced 403s with a clean `ls -l`. `ls -Z` and `ausearch` belong in the 403 path before chmod.

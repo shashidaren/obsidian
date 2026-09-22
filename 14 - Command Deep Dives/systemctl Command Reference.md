@@ -7,8 +7,8 @@ This is the day-to-day cheat sheet for `systemctl`: inspect state, find why a un
 ## Why it matters
 
 - `active (running)` is not the same as healthy. A unit can be running the wrong binary, looping crash-restart, or listening on the wrong socket.
-- Most “restart it again” incidents are missing one of: `status`, `cat`, `show`, `list-dependencies`, or the journal.
-- Drop-ins and `daemon-reload` mistakes are a top source of “I edited the unit and nothing changed”.
+- Most "restart it again" incidents are missing one of: `status`, `cat`, `show`, `list-dependencies`, or the journal.
+- Drop-ins and `daemon-reload` mistakes are a top source of "I edited the unit and nothing changed".
 
 ## Mental Model
 
@@ -115,8 +115,8 @@ Short names work (`nginx` instead of `nginx.service`) when the type is unambiguo
 - Run `status`, `cat`, and `journalctl -u ... -b` before any restart. Restarting wipes a useful `Result=` / last-exit picture.
 - `systemctl show` is the structured source of truth. `status` is a summary; it omits most properties.
 - After a unit-file change, if `cat` still shows the old `ExecStart`, you did not `daemon-reload` (or you edited a different unit).
-- `NRestarts` climbing during an incident means the unit is crash-looping, not “a bit busy”.
-- `mask` is for “this must never start, even as a dependency”. Do not use it as a substitute for disable.
+- `NRestarts` climbing during an incident means the unit is crash-looping, not "a bit busy".
+- `mask` is for "this must never start, even as a dependency". Do not use it as a substitute for disable.
 - Prefer drop-ins (`systemctl edit`) over copying vendor units into `/etc/systemd/system/`. Package upgrades overwrite `/usr/lib` but not your drop-in.
 - On containers, `systemctl` may be a stub or talk to a different systemd. Confirm PID 1 is systemd before trusting output.
 
@@ -131,4 +131,7 @@ Short names work (`nginx` instead of `nginx.service`) when the type is unambiguo
 
 ## Personal Lessons Learned
 
-> 
+- I edited `/usr/lib/systemd/system/app.service` and watched the next package update wipe the Environment= line. `systemctl edit` drop-ins survive upgrades; vendor units do not.
+- A unit sat in `activating (auto-restart)` looking "busy" on the status line. `NRestarts=47` and `Result=exit-code` were in `systemctl show`. Status is a teaser; `show` is the record.
+- Forgot `daemon-reload` after a drop-in, restarted, nothing changed. `systemctl cat` still printed the old ExecStart. That is now the first check after any unit edit.
+- Someone `mask`ed postfix during an incident and left it. Weeks later a playbook `start` failed with a confusing error. `is-enabled` and `ls -l /etc/systemd/system/postfix.service` belong in the "why won't this start" path.

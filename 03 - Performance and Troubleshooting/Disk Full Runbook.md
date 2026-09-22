@@ -155,11 +155,11 @@ journalctl -u <service> -n 50 --no-pager
 
 ## 6. Prevention & Follow-up
 
-- Alert on disk **and** inode usage (80% / 90% thresholds).
-- Ensure logrotate is configured and working for all major logs.
+- Alert on disk **and** inode usage, preferably on runway (days-to-full at peak growth), not only percent.
+- Ensure logrotate is configured and working for all major logs; `copytruncate` leftovers are a common leak.
 - For containers: use log drivers with size limits or a proper logging stack.
 - Consider separate filesystems for `/var/log`, `/var/lib/docker`, and application data.
-- Document the root cause.
+- After recovery, write down what filled the volume. Capacity without a cause is a recurring page.
 
 ---
 
@@ -169,6 +169,7 @@ journalctl -u <service> -n 50 --no-pager
 - [[Inodes]]
 - [[lsof Deep Dive]]
 - [[logrotate]]
+- [[Capacity Planning]]
 - [[Troubleshooting Methodology]]
 - [[Performance Investigation Framework]]
 
@@ -176,6 +177,7 @@ journalctl -u <service> -n 50 --no-pager
 
 ## Personal Lessons Learned
 
-> Add real incidents here later, for example:
-> - 2025-xx-xx: Docker overlay2 filled /var because of uncontrolled image pulls
-> - Truncating logs with `>` is safer than `rm` when the process still has the file open
+- `df` said 100% and `du -xhd1 /` said 40%. `lsof +L1` showed a 60 GB deleted journal still held by rsyslog. Truncate or restart the holder; `rm` already happened and did nothing.
+- Inode exhaustion on a PHP host with a tidy `df -h`. Session files in the millions. Always run `df -i` in the first minute — block-full runbooks miss it.
+- Docker overlay2 on the root volume is the gift that keeps paging. `docker system df` before you start deleting application data. Separate the graph driver or cap logs.
+- Growing the LV without finding the leak bought three quiet weeks. The same core-dump directory filled it again. Remediation without a cause is a scheduled repeat.
