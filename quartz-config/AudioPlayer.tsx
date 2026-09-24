@@ -13,7 +13,7 @@ const AudioPlayer: QuartzComponent = ({ displayClass }: QuartzComponentProps) =>
         </span>
         <span class="listen-label">Listen</span>
       </button>
-      <p class="listen-hint">Uses the phone browser voice. Tap again to stop.</p>
+      <p class="listen-hint">Tap Listen. On Android keep Chrome in the foreground and volume up.</p>
     </div>
   )
 }
