@@ -2,13 +2,11 @@
 
 // Technical knowledge-base tweaks
 
-// Slightly tighter code blocks, better on mobile
 pre > code {
   font-size: 0.85rem;
   line-height: 1.45;
 }
 
-// Clearer headings
 h1 {
   letter-spacing: -0.02em;
 }
@@ -19,20 +17,40 @@ h2 {
   padding-bottom: 0.35rem;
 }
 
-// Tables — important for runbook-style notes
 table {
   font-size: 0.92rem;
 }
 
-// Callouts / blockquotes a bit more visible
 blockquote {
   border-left-width: 4px;
 }
 
-// Mobile: a bit more comfortable reading width
 @media (max-width: 800px) {
   .center {
     padding-left: 1rem;
     padding-right: 1rem;
   }
+}
+
+.audio-player {
+  margin: 0.35rem 0 1rem 0;
+}
+
+.listen-note-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--lightgray);
+  background: var(--light);
+  color: var(--dark);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.listen-hint {
+  margin: 0.35rem 0 0 0;
+  font-size: 0.78rem;
+  color: var(--gray);
 }

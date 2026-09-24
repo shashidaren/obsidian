@@ -1,0 +1,35 @@
+.audio-player {
+  margin: 0.35rem 0 1rem 0;
+}
+
+.listen-note-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--lightgray);
+  background: var(--light);
+  color: var(--dark);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.listen-note-btn.is-playing {
+  border-color: var(--secondary);
+  color: var(--secondary);
+}
+
+.listen-hint {
+  margin: 0.35rem 0 0 0;
+  font-size: 0.78rem;
+  color: var(--gray);
+}
+
+@media (max-width: 800px) {
+  .listen-note-btn {
+    min-height: 2.4rem;
+    padding: 0.5rem 1rem;
+  }
+}
