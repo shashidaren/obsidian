@@ -12,6 +12,7 @@ Symptoms inside the guest are often *host contention, storage latency, or virtua
 - Snapshots silently grow and then punish both backup windows and guest disk latency
 - Live migration and host maintenance produce brief pauses that look like network blips
 - Tools run *inside* the guest cannot see host p99 latency; you need hypervisor metrics too
+- Cloud burst credits and oversized vCPU counts create problems that look like application regressions
 
 Treat guest and host as two layers. Fixing the wrong layer wastes the incident.
 
@@ -31,7 +32,7 @@ Questions, in order:
 3. Is the datastore / volume hitting latency or snapshot overhead?
 4. Did placement, migration, or a snapshot start when the symptom started?
 
-`steal` time (`st` in `top`/`vmstat`) is the guest-visible signature of host CPU contention.
+`steal` time (`st` in `top`/`vmstat`) is the guest-visible signature of host CPU contention. High `wa` with a calm CPU is usually the datastore, not the JVM.
 
 ## Key Commands
 
@@ -45,13 +46,11 @@ mpstat -P ALL 1 5
 
 # Disk latency from the guest's point of view
 iostat -xz 1 10
-# or
-awk '/sd|vd|xvd|nvme/' /proc/diskstats
 
 # virtio / xen / hv devices present?
-lsblk
+lsblk -o NAME,SIZE,TYPE,TRAN,ROTA,MODEL
 lspci | grep -i -E 'virtio|vmware|xen|hyperv|amazon'
-dmesg | grep -i -E 'balloon|steal|virtio|timeout'
+dmesg -T | grep -iE 'balloon|steal|virtio|timeout|reset'
 
 # Timekeeping (NTP fights with VM clock if mis-set)
 timedatectl
@@ -71,11 +70,11 @@ virsh qemu-monitor-command <name> --hmp info block
 # Host view of contention
 vmstat 1 5
 iostat -xz 1 5
-# per-VM cgroup (libvirt typically under machine.slice)
 systemctl status machine.slice
 
-# Cloud: check instance metrics for steal, disk queue, burst credits
-# (AWS CPUCreditBalance / disk burst; similar ideas exist elsewhere)
+# Cloud: steal, disk queue, burst credits
+# AWS: CPUCreditBalance, EBSBurstBalance / volume idle time
+# Same idea exists under other names on other clouds — graph credits, not only IOPS
 ```
 
 ## Common Failure Modes & Symptoms
@@ -90,16 +89,18 @@ systemctl status machine.slice
 | Network throughput capped, odd latency | Virtio offload, security groups, noisy pNIC | ethtool offloads, hypervisor net metrics |
 | Guest fine after reboot, degrades over days | Snapshot chain, memory leak, balloon | Snapshot age, guest memory trend |
 | Clock drift, TLS/kerberos failures | VM clock vs NTP after pause | `chronyc tracking`, hypervisor time sync |
+| Fast in a 30s test, dies under load | Burst-credit volume emptied | Credit metric vs sustained IOPS |
 
 ## Investigation Tips
 
 - Always record **guest steal, iowait, and hypervisor event times** before restarting the VM. A reboot clears the evidence and often “fixes” a noisy neighbor until it comes back.
 - Compare two VMs on the same host vs the same VM after a migrate. That split tells you guest vs host vs storage.
 - Snapshots are not backups. A week-old snapshot can add random write penalty that no amount of guest tuning will hide.
-- Burst-credit disks (common in cloud) look fast in a 30-second test and collapse under sustained write. Graph credits, not just IOPS.
+- Burst-credit disks look fast in a 30-second test and collapse under sustained write. Graph credits, not just IOPS.
 - If `iostat` await is high *and* the hypervisor reports high datastore latency, do not rebuild the application first.
 - Disable or document extra time sync (guest agent + chrony + hypervisor) so only one source steps the clock.
 - Capacity: vCPU count ≠ faster VM. Over-allocating vCPUs increases steal and ready time.
+- Ask “when did this VM last migrate or snapshot?” before you rewrite the app config.
 
 ## Related Notes
 
@@ -113,4 +114,7 @@ systemctl status machine.slice
 
 ## Personal Lessons Learned
 
-> The first time I saw 40% steal on a “dedicated” VM, the host was running an unthrottled batch job from another team. Guest APM was a dead end until someone opened the hypervisor CPU chart.
+- The first time I saw 40% steal on a “dedicated” VM, the host was running an unthrottled batch job from another team. Guest APM was a dead end until someone opened the hypervisor CPU chart.
+- A “disk full on the guest” ticket was a 2 TB snapshot left from a backup test. Guest `df` was fine; the datastore was not. Always compare both numbers.
+- We doubled vCPUs on a latency-sensitive VM and made steal worse. Ready time on the host went up. Fewer vCPUs, pinned or reserved, was the actual fix.
+- Clock jumps after maintenance windows broke Kerberos and TLS more often than the brief pause itself. One time source, documented.

@@ -33,6 +33,8 @@ Types of test, cheapest first:
 
 Rotate *what* you test. Always restoring the same small share trains you to miss the 2 TB database that actually matters.
 
+RPO is “how much data we agree to lose.” A restore test that only pulls last night’s full dump does not prove the incremental chain you would need at 16:00.
+
 ## Key Commands
 
 ```bash
@@ -80,6 +82,7 @@ Write the exact commands you used into the runbook. If the test required a triba
 | Took 14 hours vs 2-hour RTO | Network, single-stream restore, cold cache | Measure throughput; test parallel restore |
 | Works for operator A only | Privileges and tribal knowledge | Have a second person execute the runbook cold |
 | Scratch restore poisoned production | Wrong target, reused connection string | Isolated network / separate credentials |
+| Object lock / immutability blocks read | Restore role cannot read locked objects | Test the *restore* identity, not the backup writer |
 
 ## Investigation Tips
 
@@ -90,6 +93,7 @@ Write the exact commands you used into the runbook. If the test required a triba
 - Record four numbers every test: dataset size, restore duration, verification result, surprises.
 - After every real incident restore, update the test plan — production just taught you the gaps.
 - Immutable / object-locked backups need a tested *read* path (different role) or you will discover the lock during the outage.
+- Restore a point-in-time that is not “last night’s full” at least once a quarter, or the incremental chain is fiction.
 
 ## Related Notes
 
@@ -105,4 +109,7 @@ Write the exact commands you used into the runbook. If the test required a triba
 
 ## Personal Lessons Learned
 
-> The restore that “worked in staging” used staging credentials baked into the runbook. Production restore stalled on an IAM role nobody had exercised. Test with the identities you will actually have when the primary account is gone.
+- The restore that “worked in staging” used staging credentials baked into the runbook. Production restore stalled on an IAM role nobody had exercised. Test with the identities you will actually have when the primary account is gone.
+- We had years of green backup jobs and one empty `pg_dump` because the cron user lost `SELECT` on a new schema. `pg_restore -l` in the morning job would have caught it the first night.
+- A “2 hour RTO” assumed the object store was next door. From the DR region it was 80 MB/s. Measured restore was 11 hours. Throughput is part of the test, not an afterthought.
+- The second-person cold run of the runbook found three undocumented vault paths and a laptop-only kubeconfig. That was the most valuable test we ran that year.

@@ -33,6 +33,8 @@ Set upstream idle *shorter* than the backend server’s keepalive timeout, so th
 
 Also in the drawing: connect timeout, read timeout, send timeout. Keep-alive does not save you if `proxy_read_timeout` is 30s and the query takes 45s.
 
+Pool size (`keepalive 32`) is connections *per nginx worker* to that upstream, not a cluster-wide cap. Do the multiplication before you congratulate yourself.
+
 ## Key Commands
 
 ```bash
@@ -90,6 +92,7 @@ Without `proxy_http_version 1.1` and clearing `Connection`, `keepalive` on the u
 | Worker connection count climbs | keepalive too high, leaks | `ss` to upstream; worker RSS |
 | HTTP/1.0 clients slow | Frontend keep-alive off | `keepalive_timeout` on the listen server |
 | POST duplicated | Retry on a recycled bad socket | Disable retry on non-idempotent |
+| 502 wave at deploy | Old workers closed; proxy still held sockets | Drain then stop; align idle |
 
 ## Investigation Tips
 
@@ -99,6 +102,7 @@ Without `proxy_http_version 1.1` and clearing `Connection`, `keepalive` on the u
 - Cloud LBs (ALB idle 60s default on many accounts) must be in the same drawing as nginx `keepalive_timeout`.
 - HTTP/2 / HTTP/3 multiplex differently. Do not debug them with HTTP/1 keepalive assumptions.
 - Connection exhaustion at the app is the other end of this: [[Connection Exhaustion]].
+- Multiply `keepalive` by worker count before you decide the app “only has 32 connections.”
 
 ## Related Notes
 
@@ -114,3 +118,5 @@ Without `proxy_http_version 1.1` and clearing `Connection`, `keepalive` on the u
 
 - We had 502s only from the iOS app, never from `curl -I`. The app pooled connections; curl opened a new one every time. The app server idle timeout was 5s shorter than nginx. Align the close so the proxy hangs up first.
 - Adding `keepalive 32` without `proxy_http_version 1.1` did nothing. The comment in the conf said “keepalive enabled.” The packet capture said otherwise.
+- A deploy that SIGTERM’d app workers immediately produced a 90-second 502 storm. Graceful drain plus a proxy idle shorter than the app’s shutdown wait ended it.
+- Someone set `keepalive 256` on an 8-worker proxy in front of a 100-connection Postgres pool via the app. The math belonged on a whiteboard before the change, not after the outage.

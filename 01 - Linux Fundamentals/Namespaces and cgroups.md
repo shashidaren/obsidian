@@ -13,6 +13,7 @@ Containers are not a separate kernel feature. They are namespaces + cgroups + a 
 - Resource limits explain sudden OOM kills inside an otherwise healthy host
 - Mount and network namespaces explain why host tools and container tools disagree
 - On Kubernetes nodes, the same mechanisms implement requests, limits, and QoS
+- systemd slices use the same cgroup tree for host services — this is not “just Docker”
 
 If you only look at host `top`/`free`, you will misdiagnose container problems.
 
@@ -38,7 +39,9 @@ Common namespaces:
 | `ipc`     | SysV / POSIX IPC |
 | `cgroup`  | cgroup root |
 
-cgroup v2 (unified hierarchy under `/sys/fs/cgroup`) is what you should expect on current distros. v1 still appears on older hosts.
+cgroup v2 (unified hierarchy under `/sys/fs/cgroup`) is what you should expect on current distros. v1 still appears on older hosts. Mixed nodes are a trap: the same controller name lives in a different path.
+
+`memory.max` is a hard stop. Hitting it is an OOM *inside that cgroup*, even if `free -h` on the host looks comfortable. `cpu.max` is a quota (budget per period), not a nice suggestion.
 
 ## Key Commands
 
@@ -52,11 +55,15 @@ lsns -p <pid>
 nsenter -t <pid> -a /bin/bash          # all namespaces
 nsenter -t <pid> -n ip addr            # just network
 nsenter -t <pid> -m ls /               # just mount
+nsenter -t <pid> -n ss -lntup
 
 # cgroup v2: find a process's cgroup and its limits
 cat /proc/<pid>/cgroup
-cat /sys/fs/cgroup$(awk -F: '{print $NF}' /proc/<pid>/cgroup)/memory.max
-cat /sys/fs/cgroup$(awk -F: '{print $NF}' /proc/<pid>/cgroup)/cpu.max
+CG=/sys/fs/cgroup$(awk -F: '{print $NF}' /proc/<pid>/cgroup)
+echo "$CG"
+cat "$CG/memory.max" "$CG/memory.current" "$CG/memory.events"
+cat "$CG/cpu.max" "$CG/cpu.stat"
+cat "$CG/pids.current" "$CG/pids.max"
 
 # systemd slice view (host services)
 systemctl status <unit>
@@ -65,11 +72,13 @@ systemctl show <unit> -p MemoryMax -p CPUQuota -p TasksMax
 # Container / kube shortcuts
 docker inspect <id> --format '{{.State.Pid}} {{.HostConfig.Memory}}'
 crictl inspect <id>
-cat /sys/fs/cgroup/kubepods.slice/.../memory.current   # path varies
+# kube path varies by runtime and version — start from /proc/<pause-pid>/cgroup
 
-# Who is hitting the memory limit?
-# memory.events / memory.stat inside the cgroup directory
-grep -E 'oom|max' /sys/fs/cgroup/**/memory.events 2>/dev/null | grep -v ': 0$'
+# Who is hitting the memory limit on this node?
+grep -R E 'oom_kill|max' /sys/fs/cgroup --include=memory.events 2>/dev/null | grep -v ': 0$'
+
+# v1 vs v2?
+stat -fc %T /sys/fs/cgroup
 ```
 
 ## Common Failure Modes & Symptoms
@@ -77,12 +86,13 @@ grep -E 'oom|max' /sys/fs/cgroup/**/memory.events 2>/dev/null | grep -v ': 0$'
 | Symptom | Likely cause | First checks |
 |---------|--------------|--------------|
 | Process OOM-killed, host still has free RAM | cgroup `memory.max` hit | `/proc/<pid>/cgroup`, `memory.events`, dmesg `Memory cgroup out of memory` |
-| Container CPU capped while host is idle | `cpu.max` quota / CFS period | `cpu.max`, `cpu.stat`, `docker stats` / metrics |
+| Container CPU capped while host is idle | `cpu.max` quota / CFS period | `cpu.max`, `cpu.stat` `throttled_*`, `docker stats` |
 | “Cannot fork” inside container | `pids.max` | `pids.current` vs `pids.max` |
 | Host `ss`/`ip` show nothing the app uses | App is in another netns | `lsns -t net`, `nsenter -t <pid> -n ss -lnt` |
 | File exists on host, missing in container | Mount namespace / overlay | `nsenter -t <pid> -m findmnt` |
 | Permission denied on a file the UID should own | User namespace UID map | `/proc/<pid>/uid_map`, `ls -n` |
 | `iptables` rules on host do not match traffic | Traffic is in a pod/container netns or via veth/CNI | Inspect the *peer* netns, not only the host |
+| Limit raised, still killed | Runtime did not apply; wrong cgroup; leak faster than you think | Re-read `memory.max` for the live PID |
 
 ## Investigation Tips
 
@@ -92,6 +102,7 @@ grep -E 'oom|max' /sys/fs/cgroup/**/memory.events 2>/dev/null | grep -v ': 0$'
 - Kubernetes *requests* affect scheduling and (on cpu) how shares are divided. *Limits* are the hard cgroup caps. A pod with a memory limit will be killed at that cap even if the node has RAM left.
 - Do not disable cgroups to “fix” an app. Raise the limit or fix the leak after you have evidence.
 - On v1 vs v2 mixed nodes, controllers live in different trees. Check `stat -fc %T /sys/fs/cgroup` (`cgroup2fs` vs tmpfs + v1 mounts).
+- After changing a kube limit, confirm the *running* cgroup file changed. YAML that did not roll out is a common false fix.
 
 ## Related Notes
 
@@ -105,4 +116,7 @@ grep -E 'oom|max' /sys/fs/cgroup/**/memory.events 2>/dev/null | grep -v ': 0$'
 
 ## Personal Lessons Learned
 
-> A host that looks fine in `free -h` can still kill a container every few minutes. Always read the cgroup `memory.events` for that pod before resizing the node.
+- A host that looks fine in `free -h` can still kill a container every few minutes. Always read the cgroup `memory.events` for that pod before resizing the node.
+- I once “fixed” a CPU-starved API by adding nodes. `cpu.stat` already showed heavy throttling on a 200m limit. The app needed a limit change, not a bigger cluster.
+- `docker exec` into a distroless image is a dead end. `nsenter -t <host-pid> -n` with host `ss`/`tcpdump` is how you debug the netns those images actually have.
+- User-namespace mapped UIDs made a bind-mounted config “owned by root” inside and “owned by 100000” on the host. `ls -n` on both sides ended the chmod lottery.
