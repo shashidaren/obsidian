@@ -104,4 +104,6 @@ Use `-servername` whenever name-based virtual hosts or a TLS terminator is in fr
 
 ## Personal Lessons Learned
 
-> 
+- A renewal “succeeded” in the ACME log and failed in the browser because nginx was still serving the old bundle. The new files were on disk; the worker had not been reloaded. Compare `notAfter` from `s_client` with `notAfter` on the file the unit actually opens (`lsof`).
+- One backend of four still had last year’s cert. The LB health check was HTTP, so it stayed in rotation. Hit each backend IP with `s_client -servername` before you call the rollout done.
+- Java failed with `PKIX path building failed` while curl was fine. Curl used the system bundle; the app used a private truststore that never got the new intermediate. “Works in curl” is not “works in the process”.

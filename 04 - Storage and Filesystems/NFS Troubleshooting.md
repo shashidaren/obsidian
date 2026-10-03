@@ -116,4 +116,6 @@ server:/export  /data  nfs  rw,hard,noatime,_netdev  0  0
 
 ## Personal Lessons Learned
 
-> 
+- The classic “load 40, CPU idle” page was NFS, not a scheduler bug. `ps` showed a pile of `D` state, `/proc/<pid>/stack` was in `nfs_wait`, and the server’s export disk was 100% util. Soft vs hard was the design question afterwards, not during the page.
+- “Permission denied” for an app user while root could `ls` was `root_squash` plus UID 1001 on the client and 1001 belonging to someone else on the server. `ls -ln` on both sides beats staring at `chmod`.
+- NFSv4 “nobody” ownership was an `idmapd` domain mismatch after a hostname change. Same `Domain=` on client and server, then remount. The export itself was fine.

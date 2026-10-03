@@ -102,4 +102,6 @@ Persistent mdadm config is typically `/etc/mdadm.conf` or `/etc/mdadm/mdadm.conf
 
 ## Personal Lessons Learned
 
-> 
+- A controller GUI that said “optimal” while `dmesg` was full of medium errors taught me to trust the disk, not the summary tile. `smartctl` on the physical members (or `storcli /c0 /eall /sall show`) is the check, not the green icon.
+- Rebuild of a 12-disk RAID 6 took most of a weekend and the array was one URE away from gone the whole time. Degraded is an incident. Order the spare before you write the ticket update.
+- I once “fixed” a missing member by assembling the array from the three disks that were online. The fourth had the newer superblock. Forced assemble without `--examine` on every member is how you invent a split brain. RAID is not a backup; the restore is.

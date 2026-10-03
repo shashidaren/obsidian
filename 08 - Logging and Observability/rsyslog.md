@@ -118,4 +118,6 @@ Exact syntax varies by rsyslog version (RainerScript vs legacy). Prefer the styl
 
 ## Personal Lessons Learned
 
-> 
+- A “rsyslog is running” host was writing into a deleted inode after a logrotate that never sent HUP. `df` showed the space; `ls` did not. `lsof | grep deleted` under `/var/log` is the check before you restart and lose the file.
+- Remote forwarding looked healthy until the disk-assisted queue under `/var/spool/rsyslog` filled and new messages were dropped. The SIEM gap started hours before anyone noticed. Queue depth belongs on a graph, not in a config comment.
+- I reloaded a broken drop-in once and lost local auth logging until the next boot’s failed unit was obvious. `rsyslogd -N1` before `systemctl reload` is cheaper than reconstructing who logged in.
