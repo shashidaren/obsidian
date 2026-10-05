@@ -31,5 +31,15 @@ Practical reference library for administration, troubleshooting, incident respon
 - [[06 - Security and Identity/SSH Hardening and Troubleshooting|Security & Identity]]
 - [[08 - Logging and Observability/Logging Architecture|Logging & Observability]]
 - [[13 - Operations and Resilience/Incident Management|Operations & Resilience]]
+- [[11 - Applications and Databases/Database Operational Basics|Applications & Databases]]
+
+## Oracle
+
+Linux-side operational notes, not a DBA course.
+
+- [[11 - Applications and Databases/Oracle for Linux Admins|Oracle for Linux Admins]]
+- [[11 - Applications and Databases/Oracle Listener and Connections|Oracle Listener and Connections]]
+- [[11 - Applications and Databases/Oracle Alert Log and Processes|Oracle Alert Log and Processes]]
+- [[11 - Applications and Databases/Oracle Storage and the FRA|Oracle Storage and the FRA]]
 
 Browse the folders in the left explorer or use search.

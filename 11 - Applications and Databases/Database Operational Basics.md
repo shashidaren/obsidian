@@ -2,7 +2,7 @@
 
 ## Concept
 
-From an operations seat, a database is a **stateful service** with a small set of concerns you must own regardless of engine (PostgreSQL, MySQL, MongoDB, …):
+From an operations seat, a database is a **stateful service** with a small set of concerns you must own regardless of engine (PostgreSQL, MySQL, Oracle, MongoDB, …):
 
 - Connectivity and authentication
 - Process / replication health
@@ -41,12 +41,14 @@ Ops questions:
 
 Treat the database as a dependency with its own SLIs: availability, lag, connection usage, disk, query latency — not just "process is up".
 
+Oracle splits that picture into an instance (memory and background processes) and a listener in front of it. See [[Oracle for Linux Admins]].
+
 ## Key Commands & Checks
 
 ```bash
 # Host / process (engine-agnostic starting points)
 systemctl status <db-service>
-ss -tulpn | grep -E '5432|3306|27017'
+ss -tulpn | grep -E '5432|3306|1521|27017'
 df -hT <data-mount>
 df -i  <data-mount>
 free -h
@@ -70,6 +72,10 @@ mysql -e 'SHOW STATUS LIKE "Innodb_buffer_pool%";'
 mysql -e 'SHOW PROCESSLIST;'
 mysql -e 'SHOW REPLICA STATUS\\G'              # or SHOW SLAVE STATUS
 
+# Oracle sketch — details in the Oracle notes
+ps -ef | grep -E '[o]ra_pmon_|[t]nslsnr'
+lsnrctl status
+
 # Kubernetes
 kubectl get pods -n <ns> -l app=<db>
 kubectl logs <pod> -n <ns> --tail=100
@@ -78,9 +84,9 @@ kubectl exec -it <pod> -n <ns> -- df -h
 
 Know where your engine keeps:
 
-- Data directory and WAL/binlog location (often separate disks)
-- Auth config (`pg_hba.conf`, MySQL users/host, SCRAM vs md5)
-- Slow query log / `pg_stat_statements` / Performance Schema
+- Data directory and WAL/binlog/redo location (often separate disks)
+- Auth config (`pg_hba.conf`, MySQL users/host, Oracle listener and service name)
+- Slow query log / `pg_stat_statements` / Performance Schema / Oracle alert log
 
 ## Common Failure Modes & Symptoms
 
@@ -88,28 +94,33 @@ Know where your engine keeps:
 |---------|--------------|--------------|
 | App timeouts, DB process up | Connection pool exhausted, max_connections | `ss`/processlist; pool config vs DB limit |
 | "Too many connections" | Leak, thundering herd after restart | Who holds connections; app pool sizes |
-| Sudden disk full | WAL growth, temp files, runaway logging | `df` on data *and* WAL volume; open transactions |
+| Sudden disk full | WAL growth, temp files, runaway logging, Oracle FRA | `df` on data *and* WAL/FRA volume; open transactions |
 | High latency, CPU high | Missing index, bad plan, vacuum/analyze debt | Slow query log; active queries |
 | High latency, CPU low | Locks, I/O wait, remote storage | Locks; `iostat`; cloud volume metrics |
 | Replica lag | Apply rate, long transactions on primary | Lag metrics; long tx on primary |
 | Auth failures after change | pg_hba / password / TLS requirement | DB auth log; test one connection with same params as app |
 | Data "missing" after Pod reschedule | emptyDir or wrong PVC | Volume mounts; see [[Persistent Storage]] |
 | Crash loops on start | Corrupt recovery, wrong permissions, full disk | DB logs before restart; disk; file ownership |
+| Oracle "down", process up | Listener or service name | [[Oracle Listener and Connections]] |
 
 ## Investigation Tips
 
 - Establish **scope**: one client, one pool, whole primary, all replicas? That splits app vs DB vs network quickly.
 - Prefer evidence over restart. A restart may clear locks and destroy the processlist you needed for the RCA.
 - Connection problems: test with the **same host, user, TLS, and database name** the app uses. Admin localhost success proves little.
-- Disk: check the filesystem that holds data *and* the one that holds WAL/binlogs. They are often different mounts.
+- Disk: check the filesystem that holds data *and* the one that holds WAL/binlogs/FRA. They are often different mounts.
 - Locks: look for long-running transactions holding locks, not only for "slow queries". A forgotten `BEGIN` from a admin session can stall writers.
 - After any incident, ask: was this visible in metrics before pages fired? Connection usage, lag, and disk need anticipatory alerts — see [[Alert Design]].
-- Never run undocumented repair tools or delete WAL because disk is full without engine-specific procedure and a snapshot if possible.
+- Never run undocumented repair tools or delete WAL/redo because disk is full without engine-specific procedure and a snapshot if possible.
 
 ## Related Notes
 
 - [[Database Backup and Restore]]
 - [[Connection Exhaustion]]
+- [[Oracle for Linux Admins]]
+- [[Oracle Listener and Connections]]
+- [[Oracle Alert Log and Processes]]
+- [[Oracle Storage and the FRA]]
 - [[Persistent Storage]]
 - [[Memory Pressure Runbook]]
 - [[Disk Full Runbook]]
