@@ -113,6 +113,7 @@ Keep a root console or an already-authenticated root session *before* you edit a
 ## Related Notes
 
 - [[sudo]]
+- [[sysctl and Resource Limits]]
 - [[SSH Hardening and Troubleshooting]]
 - [[Users Groups and Permissions]]
 - [[Secrets Management]]

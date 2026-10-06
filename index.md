@@ -43,3 +43,11 @@ Linux-side operational notes, not a DBA course.
 - [[11 - Applications and Databases/Oracle Storage and the FRA|Oracle Storage and the FRA]]
 
 Browse the folders in the left explorer or use search.
+
+## New operational notes
+
+- [[Time Sync and chrony]]
+- [[sysctl and Resource Limits]]
+- [[strace Deep Dive]]
+- [[Bonds Bridges VLANs and ethtool]]
+

@@ -138,6 +138,8 @@ tcpdump -ni eth0 -c 20 port 53
 ## Related Notes
 
 - [[TCP IP Troubleshooting Model]]
+- [[Bonds Bridges VLANs and ethtool]]
+- [[strace Deep Dive]]
 - [[ss Deep Dive]]
 - [[curl Deep Dive]]
 - [[ip Command Deep Dive]]

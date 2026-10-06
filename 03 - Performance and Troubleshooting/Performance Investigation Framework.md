@@ -98,6 +98,7 @@ journalctl -u <unit> -S -15m --no-pager
 ## Related Notes
 
 - [[Troubleshooting Methodology]]
+- [[strace Deep Dive]]
 - [[High CPU Runbook]]
 - [[High Load Low CPU]]
 - [[Memory Pressure Runbook]]

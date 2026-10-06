@@ -95,6 +95,7 @@ Use `-servername` whenever name-based virtual hosts or a TLS terminator is in fr
 ## Related Notes
 
 - [[Certificates and PKI]]
+- [[Time Sync and chrony]]
 - [[curl Deep Dive]]
 - [[dig Deep Dive]]
 - [[Reverse Proxies]]

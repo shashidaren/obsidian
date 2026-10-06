@@ -123,6 +123,7 @@ watch -n1 'ip route get 10.0.50.10'
 ## Related Notes
 
 - [[TCP IP Troubleshooting Model]]
+- [[Bonds Bridges VLANs and ethtool]]
 - [[Routing]]
 - [[ARP and Neighbor Discovery]]
 - [[ss Deep Dive]]

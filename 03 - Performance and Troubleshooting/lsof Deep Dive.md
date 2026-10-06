@@ -99,6 +99,8 @@ cat /proc/<PID>/limits | grep 'open files'
 ## Related Notes
 
 - [[File Descriptors]]
+- [[strace Deep Dive]]
+- [[sysctl and Resource Limits]]
 - [[Disk Full Runbook]]
 - [[ss Deep Dive]]
 - [[df and du Deep Dive]]

@@ -115,6 +115,7 @@ ss -s
 ## Related Notes
 
 - [[Processes and Threads]]
+- [[sysctl and Resource Limits]]
 - [[lsof Deep Dive]]
 - [[ss Deep Dive]]
 - [[Connection Exhaustion]]

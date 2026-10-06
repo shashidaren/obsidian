@@ -114,6 +114,8 @@ systemctl list-sockets --all
 ## Related Notes
 
 - [[systemd Units]]
+- [[Time Sync and chrony]]
+- [[sysctl and Resource Limits]]
 - [[systemd Timers]]
 - [[journalctl Deep Dive]]
 - [[systemctl Command Reference]]

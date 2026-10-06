@@ -134,6 +134,7 @@ After any file change: `daemon-reload`, then `restart` (or `try-reload-or-restar
 ## Related Notes
 
 - [[systemctl Deep Dive]]
+- [[sysctl and Resource Limits]]
 - [[journalctl Deep Dive]]
 - [[systemd Timers]]
 - [[Linux Boot Process]]

@@ -98,6 +98,7 @@ journalctl -k -g 'Out of memory'
 ## Related Notes
 
 - [[Swap and OOM Killer]]
+- [[sysctl and Resource Limits]]
 - [[Memory Pressure Runbook]]
 - [[vmstat Deep Dive]]
 - [[Processes and Threads]]
