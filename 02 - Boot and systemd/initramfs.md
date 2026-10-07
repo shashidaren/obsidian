@@ -98,6 +98,9 @@ After rebuild, update the bootloader config if your platform does not auto-disco
 
 ## Related Notes
 
+- [[LUKS and Disk Encryption]]
+- [[mdadm Operations]]
+- [[Device Mapper Multipath]]
 - [[Linux Boot Process]]
 - [[GRUB and Kernel Parameters]]
 - [[LVM Deep Dive]]

@@ -92,6 +92,8 @@ Persistent mdadm config is typically `/etc/mdadm.conf` or `/etc/mdadm/mdadm.conf
 
 ## Related Notes
 
+- [[mdadm Operations]]
+- [[SMART and Disk Health]]
 - [[Block Devices and Partitions]]
 - [[LVM Deep Dive]]
 - [[Disk I/O and Latency]]

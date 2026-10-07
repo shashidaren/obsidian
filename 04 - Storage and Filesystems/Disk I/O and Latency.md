@@ -100,6 +100,8 @@ Do not use that `dd` on a production data filesystem except as a last-resort com
 
 ## Related Notes
 
+- [[SMART and Disk Health]]
+- [[Device Mapper Multipath]]
 - [[iostat Deep Dive]]
 - [[vmstat Deep Dive]]
 - [[pidstat Deep Dive]]

@@ -107,6 +107,7 @@ Critical options:
 
 ## Related Notes
 
+- [[LUKS and Disk Encryption]]
 - [[mount and findmnt]]
 - [[Block Devices and Partitions]]
 - [[df and du Deep Dive]]

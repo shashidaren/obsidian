@@ -117,6 +117,8 @@ Attributes in `lvs` (`lv_attr`) tell you state: `o` origin, `s` snapshot, `t` th
 
 ## Related Notes
 
+- [[Device Mapper Multipath]]
+- [[LUKS and Disk Encryption]]
 - [[Block Devices and Partitions]]
 - [[Filesystems and Mounts]]
 - [[XFS Operations]]
