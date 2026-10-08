@@ -111,6 +111,7 @@ Priority names: `emerg alert crit err warning notice info debug` (0–7). `-p er
 
 - [[journalctl Command Reference]]
 - [[journald and Persistent Storage]]
+- [[coredumpctl]]
 - [[systemctl Deep Dive]]
 - [[systemd Units]]
 - [[Logging Architecture]]

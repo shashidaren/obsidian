@@ -102,6 +102,7 @@ After rebuild, update the bootloader config if your platform does not auto-disco
 - [[mdadm Operations]]
 - [[Device Mapper Multipath]]
 - [[Linux Boot Process]]
+- [[udev and Kernel Modules]]
 - [[GRUB and Kernel Parameters]]
 - [[LVM Deep Dive]]
 - [[Block Devices and Partitions]]

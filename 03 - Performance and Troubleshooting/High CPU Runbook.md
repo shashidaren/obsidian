@@ -180,6 +180,7 @@ journalctl -u <service> -n 30 --no-pager
 ## Related Notes
 
 - [[top Deep Dive]]
+- [[perf and Flame Graphs]]
 - [[ps Deep Dive]]
 - [[pidstat Deep Dive]]
 - [[CPU Scheduling and Load Average]]

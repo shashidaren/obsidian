@@ -100,6 +100,7 @@ Rescue workflow (conceptual): boot live/rescue media → mount root (+ /boot, + 
 
 - [[GRUB and Kernel Parameters]]
 - [[initramfs]]
+- [[udev and Kernel Modules]]
 - [[systemd Units]]
 - [[systemctl Deep Dive]]
 - [[Filesystems and Mounts]]
