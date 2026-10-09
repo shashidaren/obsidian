@@ -112,6 +112,7 @@ Keep a root console or an already-authenticated root session *before* you edit a
 
 ## Related Notes
 
+- [[SSSD and Central Identity]]
 - [[sudo]]
 - [[sysctl and Resource Limits]]
 - [[SSH Hardening and Troubleshooting]]

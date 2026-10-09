@@ -109,6 +109,7 @@ Change permanent config with the front-end the host already uses. Mixing `iptabl
 
 ## Related Notes
 
+- [[firewalld Deep Dive]]
 - [[ss Deep Dive]]
 - [[tcpdump Deep Dive]]
 - [[ip Command Deep Dive]]

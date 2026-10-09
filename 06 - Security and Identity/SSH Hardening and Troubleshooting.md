@@ -117,9 +117,11 @@ Leave one break-glass path: cloud serial, out-of-band console, or a second user 
 - [[ss Deep Dive]]
 - [[TCP IP Troubleshooting Model]]
 - [[PAM]]
+- [[SSSD and Central Identity]]
 - [[sudo]]
 - [[SELinux Deep Dive]]
 - [[Users Groups and Permissions]]
+- [[cloud-init]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

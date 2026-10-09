@@ -58,3 +58,7 @@ Browse the folders in the left explorer or use search.
 - [[perf and Flame Graphs]]
 - [[udev and Kernel Modules]]
 - [[coredumpctl]]
+- [[systemd-resolved]]
+- [[firewalld Deep Dive]]
+- [[SSSD and Central Identity]]
+- [[cloud-init]]

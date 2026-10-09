@@ -97,6 +97,7 @@ Useful `resolv.conf` knobs:
 ## Related Notes
 
 - [[dig Deep Dive]]
+- [[systemd-resolved]]
 - [[TCP IP Troubleshooting Model]]
 - [[Services DNS and Ingress]]
 - [[curl Deep Dive]]

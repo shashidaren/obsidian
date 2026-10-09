@@ -103,6 +103,7 @@ Rescue workflow (conceptual): boot live/rescue media → mount root (+ /boot, + 
 - [[udev and Kernel Modules]]
 - [[systemd Units]]
 - [[systemctl Deep Dive]]
+- [[cloud-init]]
 - [[Filesystems and Mounts]]
 - [[SELinux Deep Dive]]
 - [[Troubleshooting Methodology]]

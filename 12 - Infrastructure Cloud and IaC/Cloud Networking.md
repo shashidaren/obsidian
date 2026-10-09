@@ -110,10 +110,12 @@ tcpdump -ni any host <peer> and port 443
 
 - [[Routing]]
 - [[Firewall and NAT]]
+- [[firewalld Deep Dive]]
 - [[TCP IP Troubleshooting Model]]
 - [[ss Deep Dive]]
 - [[ip Command Deep Dive]]
 - [[Identity in Cloud]]
+- [[cloud-init]]
 - [[Terraform Concepts]]
 - [[IaC Drift]]
 - [[Troubleshooting Methodology]]
