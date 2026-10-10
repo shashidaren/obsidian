@@ -114,6 +114,8 @@ Important options: `size` vs `daily`/`weekly`, `maxsize`/`minsize`, `maxage`, `d
 - [[df and du Deep Dive]]
 - [[lsof Deep Dive]]
 - [[Alert Design]]
+- [[cron and anacron]]
+- [[Local Mail for Cron and Alerts]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

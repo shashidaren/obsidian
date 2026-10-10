@@ -107,6 +107,7 @@ hostname; ip -br addr; systemctl is-active <service>
 - [[Change Management]]
 - [[Services DNS and Ingress]]
 - [[Restore Testing]]
+- [[Out of Band and IPMI]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

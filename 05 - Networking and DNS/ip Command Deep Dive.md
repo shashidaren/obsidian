@@ -129,6 +129,7 @@ watch -n1 'ip route get 10.0.50.10'
 - [[ss Deep Dive]]
 - [[tcpdump Deep Dive]]
 - [[Firewall and NAT]]
+- [[NetworkManager Deep Dive]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

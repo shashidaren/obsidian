@@ -127,6 +127,8 @@ Do not put `[Install] WantedBy=multi-user.target` on the oneshot service unless 
 - [[journalctl Deep Dive]]
 - [[Change Management]]
 - [[Backup Strategy]]
+- [[cron and anacron]]
+- [[Local Mail for Cron and Alerts]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
