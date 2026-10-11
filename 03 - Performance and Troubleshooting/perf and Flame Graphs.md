@@ -2,7 +2,7 @@
 
 ## Concept
 
-`perf` samples the CPU via the kernel’s performance counters and attributes samples to a process, a kernel function, or a stack. A flame graph turns those stacks into a picture: width is time on-CPU, height is the call stack. It answers “what is this CPU *doing*?”, not “what is it waiting for?”.
+`perf` samples the CPU via the kernel’s performance counters and attributes samples to a process, a kernel function, or a stack. A flame graph turns those stacks into a picture: width is time on-CPU, height is the call stack. It answers “what is this CPU *doing*?", not “what is it waiting for?”
 
 Off-CPU time (locks, disk, network) is a different profile. `strace` and sleep graphs cover that. Do not read an on-CPU flame graph as the whole latency story.
 
@@ -92,6 +92,7 @@ Java/Node/Python without symbols look like `Interpreter` or `[unknown]`. Use the
 - [[top Deep Dive]]
 - [[pidstat Deep Dive]]
 - [[strace Deep Dive]]
+- [[bpftrace]]
 - [[CPU Scheduling and Load Average]]
 - [[Processes and Threads]]
 - [[Performance Investigation Framework]]

@@ -111,6 +111,7 @@ Critical options:
 - [[mount and findmnt]]
 - [[Block Devices and Partitions]]
 - [[df and du Deep Dive]]
+- [[Disk Quotas]]
 - [[LVM Deep Dive]]
 - [[NFS Troubleshooting]]
 - [[Disk Full Runbook]]

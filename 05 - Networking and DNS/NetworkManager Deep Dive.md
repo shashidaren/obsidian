@@ -98,6 +98,7 @@ ls /etc/NetworkManager/system-connections/
 - [[Routing]]
 - [[DNS Resolution]]
 - [[systemd-resolved]]
+- [[systemd-networkd]]
 - [[cloud-init]]
 - [[Bonds Bridges VLANs and ethtool]]
 - [[Troubleshooting Methodology]]

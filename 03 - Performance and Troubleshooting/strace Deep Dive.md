@@ -103,6 +103,7 @@ cat /proc/sys/kernel/yama/ptrace_scope
 ## Related Notes
 
 - [[lsof Deep Dive]]
+- [[bpftrace]]
 - [[Performance Investigation Framework]]
 - [[Processes and Threads]]
 - [[File Descriptors]]

@@ -103,6 +103,7 @@ Backend: `FirewallBackend=nftables` in `/etc/firewalld/firewalld.conf` on curren
 ## Related Notes
 
 - [[Firewall and NAT]]
+- [[nftables Deep Dive]]
 - [[DNAT Port Forwarding]]
 - [[Routing]]
 - [[ss Deep Dive]]
