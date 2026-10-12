@@ -97,6 +97,7 @@ ls -l /dev/disk/by-id/
 - [[Filesystems and Mounts]]
 - [[SMART and Disk Health]]
 - [[Virtualization Troubleshooting]]
+- [[iSCSI Operations]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

@@ -107,6 +107,7 @@ Persist routes in NetworkManager, netplan, systemd-networkd, or the cloud router
 - [[Firewall and NAT]]
 - [[ss Deep Dive]]
 - [[Cloud Networking]]
+- [[tc and Traffic Control]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

@@ -104,6 +104,7 @@ journalctl -k -g 'Out of memory'
 - [[Processes and Threads]]
 - [[File Descriptors]]
 - [[Performance Investigation Framework]]
+- [[NUMA and Memory Affinity]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

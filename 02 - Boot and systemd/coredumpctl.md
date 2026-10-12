@@ -104,6 +104,7 @@ Then `systemctl daemon-reload` and restart the unit. The process must start *aft
 - [[Processes and Threads]]
 - [[strace Deep Dive]]
 - [[SELinux Deep Dive]]
+- [[kdump and Crash Dumps]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
