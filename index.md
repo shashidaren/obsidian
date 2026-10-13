@@ -74,3 +74,7 @@ Browse the folders in the left explorer or use search.
 - [[NUMA and Memory Affinity]]
 - [[iSCSI Operations]]
 - [[tc and Traffic Control]]
+- [[WireGuard Operations]]
+- [[btrfs Operations]]
+- [[ftrace Deep Dive]]
+- [[fail2ban Operations]]

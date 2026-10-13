@@ -117,6 +117,7 @@ Critical options:
 - [[Disk Full Runbook]]
 - [[ext4 Operations]]
 - [[XFS Operations]]
+- [[btrfs Operations]]
 - [[Linux Boot Process]]
 - [[Troubleshooting Methodology]]
 

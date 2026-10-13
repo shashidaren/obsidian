@@ -108,6 +108,7 @@ journalctl -u <unit> -S -15m --no-pager
 - [[top Deep Dive]]
 - [[vmstat Deep Dive]]
 - [[iostat Deep Dive]]
+- [[ftrace Deep Dive]]
 - [[Root Cause Analysis]]
 
 ## Personal Lessons Learned
