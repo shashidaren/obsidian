@@ -111,6 +111,7 @@ grep NSpid /proc/<PID>/status
 - [[pidstat Deep Dive]]
 - [[High CPU Runbook]]
 - [[Namespaces and cgroups]]
+- [[Signals and Process Control]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

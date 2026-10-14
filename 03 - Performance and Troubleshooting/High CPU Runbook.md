@@ -186,6 +186,7 @@ journalctl -u <service> -n 30 --no-pager
 - [[CPU Scheduling and Load Average]]
 - [[High Load Low CPU]]
 - [[Performance Investigation Framework]]
+- [[Signals and Process Control]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

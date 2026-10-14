@@ -106,6 +106,7 @@ Rescue workflow (conceptual): boot live/rescue media → mount root (+ /boot, + 
 - [[cloud-init]]
 - [[Filesystems and Mounts]]
 - [[SELinux Deep Dive]]
+- [[systemd-analyze]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
