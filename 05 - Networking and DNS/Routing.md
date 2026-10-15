@@ -109,6 +109,7 @@ Persist routes in NetworkManager, netplan, systemd-networkd, or the cloud router
 - [[Cloud Networking]]
 - [[tc and Traffic Control]]
 - [[WireGuard Operations]]
+- [[IPv6 Operations]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

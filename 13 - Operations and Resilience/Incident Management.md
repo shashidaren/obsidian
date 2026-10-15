@@ -110,6 +110,7 @@ printf '%s %s\n' "$(date -Is)" "declared Sev-X: <one-line symptom>" \
 - [[Alert Design]]
 - [[High Availability]]
 - [[Disaster Recovery]]
+- [[On-Call Practices]]
 
 ## Personal Lessons Learned
 

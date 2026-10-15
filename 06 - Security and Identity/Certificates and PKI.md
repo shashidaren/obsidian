@@ -22,7 +22,7 @@ client trust store                    server must send
 │                             │     + intermediates (not the root)
 │   intermediate CA(s)        │
 │                             │     client already has the root
-└── leaf / server cert  ←───────┘
+└── leaf / server cert  ←──────┘
 
 checks the client actually runs:
   1. time: notBefore ≤ now ≤ notAfter   (leaf *and* intermediates)
@@ -107,6 +107,7 @@ After any renew: inspect the *listener*, not only the files Ansible wrote. `s_cl
 - [[Reverse Proxies]]
 - [[Secrets Management]]
 - [[SSH Hardening and Troubleshooting]]
+- [[Certificate Automation]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

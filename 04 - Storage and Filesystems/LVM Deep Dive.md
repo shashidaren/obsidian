@@ -126,6 +126,7 @@ Attributes in `lvs` (`lv_attr`) tell you state: `o` origin, `s` snapshot, `t` th
 - [[Disk Full Runbook]]
 - [[df and du Deep Dive]]
 - [[lsblk]]
+- [[Thin Provisioning and Snapshots]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
