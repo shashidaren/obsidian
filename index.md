@@ -86,3 +86,7 @@ Browse the folders in the left explorer or use search.
 - [[Thin Provisioning and Snapshots]]
 - [[On-Call Practices]]
 - [[Certificate Automation]]
+- [[Linux Capabilities]]
+- [[ZFS Operations]]
+- [[Policy Based Routing]]
+- [[systemd-tmpfiles]]

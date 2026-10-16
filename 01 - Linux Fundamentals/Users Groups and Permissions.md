@@ -121,6 +121,7 @@ find /var/app -xdev -perm -0002 -type f          # world-writable
 - [[SSH Hardening and Troubleshooting]]
 - [[File Descriptors]]
 - [[Namespaces and cgroups]]
+- [[Linux Capabilities]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
