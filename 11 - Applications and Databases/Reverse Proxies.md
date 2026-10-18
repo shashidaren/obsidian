@@ -111,6 +111,7 @@ Without `$upstream_*` you are debugging with one eye closed.
 
 ## Related Notes
 
+- [[HAProxy Operations]]
 - [[Web Server Troubleshooting]]
 - [[TLS Troubleshooting]]
 - [[curl Deep Dive]]

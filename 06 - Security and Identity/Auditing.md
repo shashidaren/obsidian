@@ -116,6 +116,7 @@ ls -lh /var/log/audit/
 
 ## Related Notes
 
+- [[Auditd Deep Dive]]
 - [[SELinux Deep Dive]]
 - [[AppArmor]]
 - [[PAM]]

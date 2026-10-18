@@ -80,6 +80,7 @@ Many distros ship example tools under `/usr/share/bpftrace/tools/`. Start there 
 
 ## Related Notes
 
+- [[eBPF Deep Dive]]
 - [[strace Deep Dive]]
 - [[perf and Flame Graphs]]
 - [[Performance Investigation Framework]]

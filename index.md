@@ -90,3 +90,7 @@ Browse the folders in the left explorer or use search.
 - [[ZFS Operations]]
 - [[Policy Based Routing]]
 - [[systemd-tmpfiles]]
+- [[HAProxy Operations]]
+- [[eBPF Deep Dive]]
+- [[PostgreSQL Operational Basics]]
+- [[Auditd Deep Dive]]

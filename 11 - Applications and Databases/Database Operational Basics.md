@@ -117,6 +117,7 @@ Know where your engine keeps:
 
 - [[Database Backup and Restore]]
 - [[Connection Exhaustion]]
+- [[PostgreSQL Operational Basics]]
 - [[Oracle for Linux Admins]]
 - [[Oracle Listener and Connections]]
 - [[Oracle Alert Log and Processes]]
