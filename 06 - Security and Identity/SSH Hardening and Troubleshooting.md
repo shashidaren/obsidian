@@ -81,6 +81,7 @@ ls -ld ~/.ssh; ls -l ~/.ssh/authorized_keys
 - [[Certificates and PKI]]
 - [[PAM]]
 - [[Firewall and NAT]]
+- [[FIDO2 SSH Keys]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

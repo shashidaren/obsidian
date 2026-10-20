@@ -81,6 +81,7 @@ Useful `show stat` columns: svname, status, scur, qcur, qmax, ereq, econ, eresp,
 - [[ss Deep Dive]]
 - [[Connection Exhaustion]]
 - [[Certificates and PKI]]
+- [[IPVS and LVS]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

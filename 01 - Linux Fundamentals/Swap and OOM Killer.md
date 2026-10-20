@@ -118,6 +118,7 @@ Read the **full** OOM report, not just the “Killed process” line. It lists t
 - [[vmstat Deep Dive]]
 - [[Capacity Planning]]
 - [[Resource Requests and Limits]]
+- [[systemd-oomd]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
