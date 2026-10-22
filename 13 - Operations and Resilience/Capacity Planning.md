@@ -115,6 +115,7 @@ Long-term answers come from Prometheus/CloudWatch/etc.: p95 and max over 30/90 d
 - [[Incident Management]]
 - [[Alert Design]]
 - [[Troubleshooting Methodology]]
+- [[Capacity Signals]]
 
 ## Personal Lessons Learned
 
