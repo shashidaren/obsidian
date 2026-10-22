@@ -122,6 +122,7 @@ ss -s
 - [[logrotate]]
 - [[Disk Full Runbook]]
 - [[Troubleshooting Methodology]]
+- [[procfs for Troubleshooting]]
 
 ## Personal Lessons Learned
 
