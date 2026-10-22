@@ -83,6 +83,7 @@ ls -ld ~/.ssh; ls -l ~/.ssh/authorized_keys
 - [[Firewall and NAT]]
 - [[FIDO2 SSH Keys]]
 - [[Troubleshooting Methodology]]
+- [[SSH Tunnels and Jump Hosts]]
 
 ## Personal Lessons Learned
 
