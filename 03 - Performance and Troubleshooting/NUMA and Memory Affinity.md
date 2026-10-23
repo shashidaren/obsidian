@@ -74,6 +74,7 @@ numastat
 - [[High CPU Runbook]]
 - [[Performance Investigation Framework]]
 - [[Namespaces and cgroups]]
+- [[CPU Isolation and Affinity]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

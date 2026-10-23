@@ -94,7 +94,7 @@ Cloud path: repeat the same logic for security groups, network ACLs, and route t
 - Test from the **same network namespace** as the failing app (host vs container vs Pod). Host networking can lie about what the app sees.
 - Firewalls that DROP produce timeouts; REJECT often produces refused. The distinction is diagnostic.
 - Capture once when stuck: `tcpdump -ni <iface> host <ip> and port <port>` on both ends. SYN without SYN-ACK is a path/policy problem; handshake then RST is local to the target.
-- MTU/PMTUD problems look like "small things work, large requests hang". Test with `ping -M do -s 1400` or curl large payloads only after basic TCP works.
+- MTU/PMTUD problems look like "small things work, large requests hang". Test with `ping -M do -s 1400` or curl large payloads only after basic TCP works. See [[Path MTU Discovery and Blackholes]].
 
 ## Related Notes
 
@@ -105,6 +105,7 @@ Cloud path: repeat the same logic for security groups, network ACLs, and route t
 - [[TLS Troubleshooting]]
 - [[Firewall and NAT]]
 - [[Services DNS and Ingress]]
+- [[Path MTU Discovery and Blackholes]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

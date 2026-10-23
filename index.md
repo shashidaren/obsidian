@@ -102,3 +102,7 @@ Browse the folders in the left explorer or use search.
 - [[SSH Tunnels and Jump Hosts]]
 - [[procfs for Troubleshooting]]
 - [[Capacity Signals]]
+- [[CPU Isolation and Affinity]]
+- [[Path MTU Discovery and Blackholes]]
+- [[Write Barriers and Ordered Data]]
+- [[Rescue and Emergency Targets]]

@@ -119,6 +119,8 @@ Critical options:
 - [[XFS Operations]]
 - [[btrfs Operations]]
 - [[Linux Boot Process]]
+- [[Write Barriers and Ordered Data]]
+- [[Rescue and Emergency Targets]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
