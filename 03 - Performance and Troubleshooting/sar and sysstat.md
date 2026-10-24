@@ -99,6 +99,7 @@ Debian/Ubuntu: `ENABLED="true"` in `/etc/default/sysstat`, then `systemctl enabl
 - [[CPU Scheduling and Load Average]]
 - [[High CPU Runbook]]
 - [[Disk I/O and Latency]]
+- [[atop Deep Dive]]
 - [[Performance Investigation Framework]]
 - [[Troubleshooting Methodology]]
 

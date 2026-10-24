@@ -106,3 +106,7 @@ Browse the folders in the left explorer or use search.
 - [[Path MTU Discovery and Blackholes]]
 - [[Write Barriers and Ordered Data]]
 - [[Rescue and Emergency Targets]]
+- [[Transparent Huge Pages]]
+- [[atop Deep Dive]]
+- [[fstrim and Discard]]
+- [[TCP Memory and Socket Buffers]]

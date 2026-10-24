@@ -112,6 +112,7 @@ Do not use that `dd` on a production data filesystem except as a last-resort com
 - [[XFS Operations]]
 - [[ext4 Operations]]
 - [[fio and Storage Benchmarking]]
+- [[fstrim and Discard]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

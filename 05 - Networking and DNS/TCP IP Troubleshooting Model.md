@@ -106,6 +106,7 @@ Cloud path: repeat the same logic for security groups, network ACLs, and route t
 - [[Firewall and NAT]]
 - [[Services DNS and Ingress]]
 - [[Path MTU Discovery and Blackholes]]
+- [[TCP Memory and Socket Buffers]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
