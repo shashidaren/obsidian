@@ -46,6 +46,10 @@ Browse the folders in the left explorer or use search.
 
 ## New operational notes
 
+- [[Kernel Slab Memory]]
+- [[Reverse Path Filtering]]
+- [[systemd User Services and Linger]]
+- [[Dirty Writeback and vm.dirty]]
 - [[Time Sync and chrony]]
 - [[sysctl and Resource Limits]]
 - [[strace Deep Dive]]
