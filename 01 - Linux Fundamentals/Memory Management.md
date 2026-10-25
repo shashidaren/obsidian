@@ -38,7 +38,7 @@ Pressure signals (in order of “how bad”):
 
 RSS is resident anonymous + file pages *this process* holds. PSS splits shared pages. VSZ is virtual mappings and is almost never the number you page someone for.
 
-Dirty pages must be written back. A host can look “full of cache” and still stall if the backing disk cannot absorb writeback.
+Dirty pages must be written back. A host can look “full of cache” and still stall if the backing disk cannot absorb writeback. See [[Dirty Writeback and vm.dirty]] and [[Kernel Slab Memory]].
 
 ## Key Commands
 
@@ -106,6 +106,8 @@ journalctl -k -g 'Out of memory'
 - [[Performance Investigation Framework]]
 - [[NUMA and Memory Affinity]]
 - [[Transparent Huge Pages]]
+- [[Kernel Slab Memory]]
+- [[Dirty Writeback and vm.dirty]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

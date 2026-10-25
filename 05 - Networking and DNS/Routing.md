@@ -9,7 +9,7 @@ Routing is the kernel deciding the *next hop* for a packet from the forwarding i
 ## Why it matters
 
 - Missing or wrong default route is “no internet” and “no path to the other subnet”
-- Asymmetric paths break stateful firewalls and conntrack; symptoms look random
+- Asymmetric paths break stateful firewalls and conntrack; symptoms look random. Strict reverse path filtering can drop the return packets — see [[Reverse Path Filtering]].
 - Multi-homed hosts need policy routing (`ip rule`) or they leave via the wrong NIC with the wrong source address
 - Cloud and container runtimes inject routes. Stale routes outlive the path they described
 - Selective failure (“only some destinations”) is often routing or MTU, not a dead NIC
@@ -82,7 +82,7 @@ Persist routes in NetworkManager, netplan, systemd-networkd, or the cloud router
 | Nothing remote works | Missing/wrong default | `ip route get 1.1.1.1`, ping gateway |
 | On-link works, other subnets fail | No default or wrong gateway | same; compare a working host |
 | Only some destinations fail | More-specific blackhole or stale prefix | `ip route get <dst>` |
-| One direction only | Asymmetric return path + firewall | capture both ends; remote `ip route get` |
+| One direction only | Asymmetric return path + firewall or rp_filter | capture both ends; remote `ip route get`; [[Reverse Path Filtering]] |
 | Wrong NIC / wrong source | Metrics, `ip rule`, src selection | `ip route get` with `from`, `ip rule` |
 | After failover, still broken | Stale route or stale neighbour | `ip neigh`, control-plane logs |
 | Large writes stall, small pings work | PMTU black hole (ICMP filtered) | `tracepath`, `ping -M do` |
@@ -98,6 +98,7 @@ Persist routes in NetworkManager, netplan, systemd-networkd, or the cloud router
 - Namespaces have private tables. Debugging from the host netns is how people “prove the route is fine” while the container blackholes.
 - After DHCP or cloud route pushes, look for duplicate defaults with different metrics. The higher metric is a landmine for the next failover.
 - Document every policy rule. `ip rule` is invisible to anyone who only ever types `ip r`.
+- One-way paths that tcpdump sees but the stack ignores are often [[Reverse Path Filtering]].
 
 ## Related Notes
 
@@ -110,6 +111,7 @@ Persist routes in NetworkManager, netplan, systemd-networkd, or the cloud router
 - [[tc and Traffic Control]]
 - [[WireGuard Operations]]
 - [[IPv6 Operations]]
+- [[Reverse Path Filtering]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
