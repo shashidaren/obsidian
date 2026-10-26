@@ -112,6 +112,7 @@ stat -fc %T /sys/fs/cgroup
 - [[Container Internals]]
 - [[Resource Requests and Limits]]
 - [[Pod Troubleshooting]]
+- [[Network Namespaces]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

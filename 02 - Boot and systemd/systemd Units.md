@@ -138,6 +138,8 @@ After any file change: `daemon-reload`, then `restart` (or `try-reload-or-restar
 - [[journalctl Deep Dive]]
 - [[systemd Timers]]
 - [[Linux Boot Process]]
+- [[systemd Socket Activation]]
+- [[systemd Service Hardening]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

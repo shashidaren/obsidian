@@ -114,3 +114,7 @@ Browse the folders in the left explorer or use search.
 - [[atop Deep Dive]]
 - [[fstrim and Discard]]
 - [[TCP Memory and Socket Buffers]]
+- [[systemd Socket Activation]]
+- [[systemd Service Hardening]]
+- [[CPU Frequency Scaling]]
+- [[Network Namespaces]]

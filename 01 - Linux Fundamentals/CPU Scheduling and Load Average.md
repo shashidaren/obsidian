@@ -108,6 +108,7 @@ grep -E 'cpu |ctxt|intr' /proc/stat
 - [[vmstat Deep Dive]]
 - [[pidstat Deep Dive]]
 - [[Performance Investigation Framework]]
+- [[CPU Frequency Scaling]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
