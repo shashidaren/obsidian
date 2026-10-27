@@ -87,7 +87,7 @@ Tune `SystemMaxUse` to the host, not to a blog post. A 20G `/var` and `SystemMax
 | Only a few hours of history | Caps or vacuum too aggressive | `SystemMaxUse`, `MaxRetentionSec`, noisy units |
 | `Permission denied` / nothing new in journal | Dir ownership, ACLs, SELinux | `ls -ldZ /var/log/journal`, audit log |
 | Previous boot missing after clone | New `machine-id`, old journal dir left behind | Compare `/etc/machine-id` vs directory name |
-| Apparent log loss under load | Rate limiting | `RateLimitBurst` / `RateLimitIntervalSec`; “suppressed N messages” in journal |
+| Apparent log loss under load | Rate limiting | [[journald Rate Limiting]]; `RateLimitBurst` / `RateLimitIntervalSec`; “suppressed N messages” in journal |
 | `journalctl --verify` reports corruption | Crash mid-write, full disk, bad disk | Vacuum broken files; check storage health |
 | Central logs fine, local journal tiny | `Storage=none` or tiny runtime cap | Config; confirm you are not looking at `/run` |
 
@@ -106,6 +106,7 @@ Tune `SystemMaxUse` to the host, not to a blog post. A 20G `/var` and `SystemMax
 - [[journalctl Deep Dive]]
 - [[journalctl Command Reference]]
 - [[Logging Architecture]]
+- [[journald Rate Limiting]]
 - [[logrotate]]
 - [[rsyslog]]
 - [[Disk Full Runbook]]
