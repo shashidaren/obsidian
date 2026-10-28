@@ -122,3 +122,7 @@ Browse the folders in the left explorer or use search.
 - [[systemd-run and Transient Units]]
 - [[TCP Congestion Control]]
 - [[journald Rate Limiting]]
+- [[kexec and Fast Reboots]]
+- [[NVMe Operations]]
+- [[Seccomp and SystemCallFilter]]
+- [[I/O Schedulers and blk-mq]]
