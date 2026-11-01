@@ -4,7 +4,7 @@
 
 chrony keeps the system clock close to a set of NTP sources. It can **step** (jump the clock) or **slew** (speed the clock up or down until the offset is gone). After the first few samples it prefers to slew, because a backwards step rewrites the past that every other subsystem already recorded.
 
-`chronyd` is the daemon. `chronyc` is the client. On many distros it replaces `ntpd`. `systemd-timesyncd` is a simpler SNTP client — fine for a laptop, wrong as the only time source for Kerberos, databases, or anything you correlate in an incident.
+`chronyd` is the daemon. `chronyc` is the client. On many distros it replaces `ntpd`. `systemd-timesyncd` is a simpler SNTP client — fine for a laptop, wrong as the only time source for Kerberos, databases, or anything you correlate in an incident. See [[systemd-timesyncd]].
 
 ## Why it matters
 
@@ -122,6 +122,7 @@ bindcmdaddress 127.0.0.1 # chronyc must not be reachable off-box
 
 ## Related Notes
 
+- [[systemd-timesyncd]]
 - [[TLS Troubleshooting]]
 - [[Certificates and PKI]]
 - [[journalctl Deep Dive]]

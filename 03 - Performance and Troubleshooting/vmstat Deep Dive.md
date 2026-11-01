@@ -84,6 +84,7 @@ Active vs inactive / slab detail is `sar -r` or `/proc/meminfo`. `vmstat` is the
 ## Related Notes
 
 - [[top Deep Dive]]
+- [[mpstat Deep Dive]]
 - [[iostat Deep Dive]]
 - [[sar and sysstat]]
 - [[pidstat Deep Dive]]

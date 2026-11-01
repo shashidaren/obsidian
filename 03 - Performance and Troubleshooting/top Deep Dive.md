@@ -98,6 +98,7 @@ Always use `-c` until you have confirmed the binary *and* its argv.
 
 ## Related Notes
 
+- [[mpstat Deep Dive]]
 - [[High CPU Runbook]]
 - [[High Load Low CPU]]
 - [[ps Deep Dive]]
