@@ -2,75 +2,40 @@
 
 ## Concept
 
-SMART (Self-Monitoring, Analysis and Reporting Technology) is the disk's own health telemetry: reallocated sectors, pending sectors, temperature, interface CRC errors, media wear, and self-test results. `smartctl` (smartmontools) reads it. NVMe exposes the same idea through the NVMe SMART log, not the ATA attribute table.
-
-SMART tells you the media or the path is sick. It does not tell you the filesystem is consistent, and a green "PASSED" does not mean the disk is safe to ignore.
+SMART (Self-Monitoring, Analysis and Reporting Technology) is the disk’s own health telemetry: reallocated sectors, pending sectors, temperature, CRC errors, and (on NVMe) percentage used and critical warnings. `smartctl` reads it; `smartd` watches it.
 
 ## Why it matters
 
-- Latency tickets and "random" I/O errors often start as pending or reallocated sectors days earlier.
-- A RAID rebuild that hits an uncorrectable sector on the surviving member is how a degraded array becomes a restore.
-- Hardware RAID and some USB/SAS bridges hide or lie about SMART. "The controller says optimal" is not a disk health check.
-- UDMA CRC / Interface CRC errors are usually cable, backplane, or HBA — replacing the disk does nothing.
-
-Treat a rising pending-sector count as an incident, not a graph to watch.
+- A disk can pass `smartctl -H` and still be dying. The attribute table is what matters.
+- Pending or reallocated sectors on a RAID member are a countdown to a failed rebuild.
+- CRC errors are usually the cable, backplane, or HBA, not the media. Replacing the disk does not fix them.
+- Cloud and many virtual disks expose no useful SMART. Guest latency and the provider’s volume metrics are the signal there.
 
 ## Mental Model
 
 ```
-Application error / slow fsync
-    → filesystem / md / LVM
-        → block device the OS can see
-            → physical disk (or a path to it)
-                → SMART / NVMe log on that disk
+media error
+    → disk tries to remap
+        → Reallocated_Sector_Ct increases (success)
+        → Current_Pending_Sector increases (not yet remapped)
+            → next write may remap or fail
 
-Attribute classes that change decisions:
-  Reallocated_Sector_Ct     sectors already remapped (rising = dying)
-  Current_Pending_Sector    waiting to be rewritten or remapped (UREs waiting)
-  Offline_Uncorrectable     confirmed unreadable
-  UDMA_CRC_Error_Count      link errors (cable/backplane/HBA), not media
-  Temperature_Celsius       thermal throttling and early death
-  Wear_Leveling / Media_Wearout / Percentage Used   SSD/NVMe life
+interface error (CRC)
+    → path problem (cable, expander, HBA)
+    → not a reason to RMA the disk first
 ```
-
-`smartctl -H` is a vendor summary bit. Read `-a` / `-x` (or `nvme smart-log`) before you trust it. A disk can report PASSED with non-zero pending sectors.
-
-Self-tests: short (minutes) catches electronics and a sample of media; long (hours) walks the surface and can surface pending sectors. Do not start a long test on a disk already in a production rebuild unless you mean to add load.
 
 ## Key Commands
 
 ```bash
-# Identity and full report
-smartctl -i /dev/sda
 smartctl -a /dev/sda
-smartctl -x /dev/sda          # includes logs, often more useful than -a
-smartctl -H /dev/sda          # summary only; not sufficient
-
-# NVMe (namespace node, not a partition)
-nvme list
-nvme smart-log /dev/nvme0
-nvme error-log /dev/nvme0
-smartctl -a /dev/nvme0        # smartmontools often works too
-
-# SCSI/SAS behind a controller: may need a device type
-smartctl -d sat -a /dev/sda
-smartctl -d scsi -a /dev/sda
-# MegaRAID/HPE examples (device numbers are vendor-specific — confirm first)
-smartctl -d megaraid,0 -a /dev/sda
-smartctl -d cciss,0 -a /dev/sda
-
-# Self-tests
-smartctl -t short /dev/sda
+smartctl -x /dev/sda          # includes logs
 smartctl -t long /dev/sda
-smartctl -l selftest /dev/sda
-smartctl -X /dev/sda          # abort a running test
-
-# What the host already saw
-dmesg -T | grep -iE 'I/O error|sense|medium error|offline|reset'
-journalctl -k -g 'I/O error|medium error' --since today
+smartctl -H /dev/sda          # overall health (insufficient alone)
+nvme smart-log /dev/nvme0
+smartd -q show
+journalctl -u smartd -n 50
 ```
-
-`smartd` (from the same package) should be running and mailing or logging on attribute changes. A one-off `smartctl` during an incident is not monitoring.
 
 ## Common Failure Modes & Symptoms
 
@@ -96,6 +61,7 @@ journalctl -k -g 'I/O error|medium error' --since today
 - Do not run `badblocks` destructively on a disk you still need. SMART long test plus vendor tools are the usual path.
 
 ## Related Notes
+- [[Ceph Operational Basics]]
 
 - [[Block Devices and Partitions]]
 - [[RAID Concepts]]

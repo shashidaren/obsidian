@@ -73,6 +73,7 @@ id
 - After you detach, confirm the process CPU dropped. A forgotten probe is still a probe.
 
 ## Related Notes
+- [[bcc and eBPF Tools]]
 
 - [[bpftrace]]
 - [[strace Deep Dive]]

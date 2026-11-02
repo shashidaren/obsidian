@@ -2,71 +2,38 @@
 
 ## Concept
 
-bpftrace is a high-level tracer that compiles small scripts into eBPF programs and attaches them to kernel and user probes. It answers “show me every time this function runs, with these arguments, without stopping the process.”
-
-Unlike `strace`, it does not ptrace-stop the target. Unlike `perf`, it can filter and print specific events (open path, TCP state change, bio latency) in one line.
+bpftrace is a high-level tracing language that compiles to eBPF. It is the fastest way to ask "how often does this happen, how long does it take, and with what arguments" without writing C or stopping the process.
 
 ## Why it matters
 
-- A latency spike that `strace` would make worse can be observed with a one-liner that only fires on the slow path.
-- You can count or histogram events (disk latency, syscall duration, lock hold time) with almost no overhead until the condition matches.
-- It works on production kernels that have BPF enabled, which is most current distros.
-- Scripts are short enough to paste into a ticket or a runbook.
+- One-liners answer the majority of "is this path even being taken" questions in an incident.
+- Histograms and counts stay in the kernel; you do not stream every event to the terminal.
+- It sits between strace (too heavy) and a full BCC tool (may not exist for your exact question).
 
 ## Mental Model
 
 ```
-bpftrace script
-    → BCC/libbpf compiles to eBPF
-         → attaches to kprobe / uprobe / tracepoint / kfunc
-              → kernel runs the program on each event
-                   → prints or aggregates in userspace
-
-probe:function / filter / { action }
+bpftrace -e 'probe /filter/ { action }'
+    → attaches
+    → filter evaluated in kernel
+    → action (printf, count, hist, stack) runs only on matches
 ```
-
-Common probe types:
-- `kprobe` / `kretprobe` — kernel function entry/return
-- `tracepoint` — stable kernel events (`syscalls:sys_enter_openat`, `block:block_rq_complete`)
-- `uprobe` — user function (needs symbols or offset)
-- `interval` / `profile` — timed sampling
-
-The kernel rejects programs that loop unboundedly or use too much memory. A script that fails to load is usually a verifier error, not a missing package.
 
 ## Key Commands
 
 ```bash
-# Is BPF available?
-bpftrace -l | head
-ls /sys/kernel/debug/tracing/available_filter_functions | head
-
-# One-liners
-bpftrace -e 'tracepoint:syscalls:sys_enter_openat { printf("%s %s\n", comm, str(args->filename)); }'
-bpftrace -e 'kprobe:vfs_read /comm == "postgres"/ { @[kstack] = count(); }'
-
-# Histogram of block I/O latency
-bpftrace -e 'tracepoint:block:block_rq_complete { @usecs = hist(args->nr_sector * 512); }'
-
-# Count TCP connects by process
-bpftrace -e 'kprobe:tcp_v4_connect { @[comm] = count(); }'
-
-# Run a script file
-bpftrace /usr/share/bpftrace/tools/biolatency.bt
+bpftrace -l 'tracepoint:syscalls:*open*'
+bpftrace -e 'tracepoint:syscalls:sys_enter_openat /comm == "nginx"/ { printf("%s\n", str(args->filename)); }'
+bpftrace -e 'tracepoint:block:block_rq_complete { @us = hist(args->nr_sector * 512); }'
 ```
-
-Many distros ship example tools under `/usr/share/bpftrace/tools/`. Start there before writing your own.
 
 ## Common Failure Modes & Symptoms
 
 | Symptom | Likely cause | First checks |
 |---------|--------------|--------------|
-| `bpftrace: command not found` | Package not installed | `bpftrace` package, kernel headers sometimes needed |
-| Program fails to load, verifier error | Loop, unbounded map, or old kernel | error text; simplify the script |
-| No output | Filter never matches, or probe name wrong | `bpftrace -l 'kprobe:vfs_*'` |
-| Permission denied | Not root, or BPF LSM / lockdown | id, `sysctl kernel.unprivileged_bpf_disabled` |
-| High overhead | Probe on a very hot function with no filter | add `/comm == "..."/` or a rate limit |
-| User stacks missing | No frame pointers or debuginfo | `--call-graph` equivalent, or use perf |
-| Works on host, fails in container | Missing privileges or cgroup BPF | run from host namespace |
+| Verifier error | Unbounded map or loop | simplify; check kernel version |
+| No output | Filter or wrong probe | drop filter; `bpftrace -l` |
+| Permission denied | caps or sysctl | run as root |
 
 ## Investigation Tips
 
@@ -79,6 +46,7 @@ Many distros ship example tools under `/usr/share/bpftrace/tools/`. Start there 
 - Test the script on a non-production box first if it attaches to a very hot function (`tcp_sendmsg`, `vfs_write`).
 
 ## Related Notes
+- [[bcc and eBPF Tools]]
 
 - [[eBPF Deep Dive]]
 - [[strace Deep Dive]]
