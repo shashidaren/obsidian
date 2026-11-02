@@ -45,6 +45,10 @@ Linux-side operational notes, not a DBA course.
 Browse the folders in the left explorer or use search.
 
 ## New operational notes
+- [[bcc and eBPF Tools]]
+- [[FRR and Dynamic Routing]]
+- [[systemd-nspawn]]
+- [[Ceph Operational Basics]]
 
 - [[Kernel Slab Memory]]
 - [[Reverse Path Filtering]]
