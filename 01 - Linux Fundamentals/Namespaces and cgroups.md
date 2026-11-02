@@ -39,33 +39,22 @@ Common namespaces:
 | `ipc`     | SysV / POSIX IPC |
 | `cgroup`  | cgroup root |
 
-cgroup v2 (unified hierarchy under `/sys/fs/cgroup`) is what you should expect on current distros. v1 still appears on older hosts. Mixed nodes are a trap: the same controller name lives in a different path.
-
-`memory.max` is a hard stop. Hitting it is an OOM *inside that cgroup*, even if `free -h` on the host looks comfortable. `cpu.max` is a quota (budget per period), not a nice suggestion.
-
 ## Key Commands
 
 ```bash
-# What namespaces does this process belong to?
+# Namespaces of a process
 ls -l /proc/<pid>/ns
 lsns
-lsns -p <pid>
+nsenter -t <pid> -n -m -u -- <command>
 
-# Enter another process's namespaces (debug a container from the host)
-nsenter -t <pid> -a /bin/bash          # all namespaces
-nsenter -t <pid> -n ip addr            # just network
-nsenter -t <pid> -m ls /               # just mount
-nsenter -t <pid> -n ss -lntup
-
-# cgroup v2: find a process's cgroup and its limits
+# cgroup of a process (v2)
 cat /proc/<pid>/cgroup
-CG=/sys/fs/cgroup$(awk -F: '{print $NF}' /proc/<pid>/cgroup)
-echo "$CG"
-cat "$CG/memory.max" "$CG/memory.current" "$CG/memory.events"
-cat "$CG/cpu.max" "$CG/cpu.stat"
-cat "$CG/pids.current" "$CG/pids.max"
+cat /sys/fs/cgroup/system.slice/foo.service/memory.current
+cat /sys/fs/cgroup/system.slice/foo.service/memory.max
+cat /sys/fs/cgroup/system.slice/foo.service/cpu.max
+cat /sys/fs/cgroup/system.slice/foo.service/memory.events
 
-# systemd slice view (host services)
+# systemd view
 systemctl status <unit>
 systemctl show <unit> -p MemoryMax -p CPUQuota -p TasksMax
 
@@ -105,6 +94,7 @@ stat -fc %T /sys/fs/cgroup
 - After changing a kube limit, confirm the *running* cgroup file changed. YAML that did not roll out is a common false fix.
 
 ## Related Notes
+- [[systemd-nspawn]]
 
 - [[Processes and Threads]]
 - [[Memory Management]]
