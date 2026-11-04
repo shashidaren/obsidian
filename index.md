@@ -142,3 +142,7 @@ Browse the folders in the left explorer or use search.
 - [[lsblk Deep Dive]]
 - [[systemd-timesyncd]]
 - [[numastat Deep Dive]]
+- [[DHCP Troubleshooting]]
+- [[systemd-logind]]
+- [[Page Cache and Drop Caches]]
+- [[Filesystem Check and Repair]]
