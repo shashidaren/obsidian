@@ -86,6 +86,7 @@ Persist the rules. A one-off `ip rule add` disappears on reboot or when NetworkM
 ## Related Notes
 
 - [[Routing]]
+- [[ip route Deep Dive]]
 - [[ip Command Deep Dive]]
 - [[Bonds Bridges VLANs and ethtool]]
 - [[Firewall and NAT]]

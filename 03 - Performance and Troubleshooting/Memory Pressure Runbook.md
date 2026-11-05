@@ -4,7 +4,7 @@
 
 **When to use**: MemAvailable collapsing, swap activity, OOM killer events, services killed or stalling, PSI memory alerts.
 
-See also [[Memory Management]] and [[Swap and OOM Killer]].
+See also [[Memory Management]] and [[Swap and OOM Killer]] and [[free and /proc/meminfo]].
 
 ---
 
@@ -183,6 +183,7 @@ dmesg -T | tail -20
 
 - [[Memory Management]]
 - [[Swap and OOM Killer]]
+- [[free and /proc/meminfo]]
 - [[vmstat Deep Dive]]
 - [[pidstat Deep Dive]]
 - [[Namespaces and cgroups]]
