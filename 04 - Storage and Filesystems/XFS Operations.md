@@ -110,6 +110,7 @@ xfsrestore -f /backup/data.xfsdump /restore-target
 - [[Disk Full Runbook]]
 - [[Inodes]]
 - [[Disk I/O and Latency]]
+- [[fstab and Mount Options]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

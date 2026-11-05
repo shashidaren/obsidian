@@ -115,6 +115,7 @@ Priority names: `emerg alert crit err warning notice info debug` (0–7). `-p er
 - [[systemctl Deep Dive]]
 - [[systemd Units]]
 - [[Logging Architecture]]
+- [[dmesg Deep Dive]]
 - [[Linux Boot Process]]
 - [[Troubleshooting Methodology]]
 
