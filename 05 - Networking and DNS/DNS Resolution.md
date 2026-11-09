@@ -102,6 +102,7 @@ Useful `resolv.conf` knobs:
 - [[Services DNS and Ingress]]
 - [[curl Deep Dive]]
 - [[Troubleshooting Methodology]]
+- [[DNSSEC Operations]]
 
 ## Personal Lessons Learned
 
