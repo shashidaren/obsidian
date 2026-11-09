@@ -93,6 +93,7 @@ Persistent config is usually `/etc/default/cpupower` or a systemd unit / tuned p
 - [[CPU Isolation and Affinity]]
 - [[NUMA and Memory Affinity]]
 - [[Troubleshooting Methodology]]
+- [[turbostat and Power]]
 
 ## Personal Lessons Learned
 

@@ -109,6 +109,7 @@ After rebuild, update the bootloader config if your platform does not auto-disco
 - [[Filesystems and Mounts]]
 - [[SELinux Deep Dive]]
 - [[Troubleshooting Methodology]]
+- [[dracut]]
 
 ## Personal Lessons Learned
 

@@ -77,6 +77,7 @@ cat /sys/block/bcache0/bcache/stats_total/*
 - [[SMART and Disk Health]]
 - [[Device Mapper Multipath]]
 - [[Troubleshooting Methodology]]
+- [[dm-cache and bcache]]
 
 ## Personal Lessons Learned
 
