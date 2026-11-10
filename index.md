@@ -45,6 +45,10 @@ Linux-side operational notes, not a DBA course.
 Browse the folders in the left explorer or use search.
 
 ## New operational notes
+- [[Memory Management]]
+- [[Transparent Huge Pages]]
+- [[Block Devices and Partitions]]
+- [[systemd Service Hardening]]
 - [[bcc and eBPF Tools]]
 - [[FRR and Dynamic Routing]]
 - [[systemd-nspawn]]
