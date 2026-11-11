@@ -109,6 +109,7 @@ hostname; ip -br addr; systemctl is-active <service>
 - [[Restore Testing]]
 - [[Out of Band and IPMI]]
 - [[Troubleshooting Methodology]]
+- [[Pacemaker and Corosync]]
 
 ## Personal Lessons Learned
 

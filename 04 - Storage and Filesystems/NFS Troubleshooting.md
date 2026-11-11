@@ -113,6 +113,8 @@ server:/export  /data  nfs  rw,hard,noatime,_netdev  0  0
 - [[TCP IP Troubleshooting Model]]
 - [[Users Groups and Permissions]]
 - [[Troubleshooting Methodology]]
+- [[Samba and CIFS Operations]]
+- [[Kerberos Operations]]
 
 ## Personal Lessons Learned
 

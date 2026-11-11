@@ -129,6 +129,7 @@ bindcmdaddress 127.0.0.1 # chronyc must not be reachable off-box
 - [[systemctl Deep Dive]]
 - [[Linux Boot Process]]
 - [[Troubleshooting Methodology]]
+- [[Kerberos Operations]]
 
 ## Personal Lessons Learned
 
