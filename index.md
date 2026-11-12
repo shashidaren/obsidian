@@ -169,3 +169,7 @@ Browse the folders in the left explorer or use search.
 - [[Pacemaker and Corosync]]
 - [[Samba and CIFS Operations]]
 - [[ARP and Neighbor Discovery]]
+- [[VXLAN and Geneve]]
+- [[Fibre Channel and FCoE]]
+- [[LDAP Client Operations]]
+- [[rsyslog Deep Dive]]

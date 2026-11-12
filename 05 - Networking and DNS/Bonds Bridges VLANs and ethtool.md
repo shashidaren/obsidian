@@ -99,6 +99,7 @@ Persist ring/offload changes via NetworkManager, systemd-networkd, or a udev rul
 - [[NetworkManager Deep Dive]]
 - [[systemd-networkd]]
 - [[Path MTU Discovery and Blackholes]]
+- [[VXLAN and Geneve]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
