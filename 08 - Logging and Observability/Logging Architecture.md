@@ -116,7 +116,7 @@ When central search is empty, run the smoke-test on the host and watch which hop
 - [[journalctl Deep Dive]]
 - [[journald and Persistent Storage]]
 - [[logrotate]]
-- [[rsyslog]]
+- [[rsyslog Deep Dive]]
 - [[Alert Design]]
 - [[Metrics Logs and Traces]]
 - [[Disk Full Runbook]]

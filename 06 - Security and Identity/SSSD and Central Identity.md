@@ -104,6 +104,7 @@ Do not delete `/var/lib/sss/db` as a first step. Expire the one user, or `system
 - [[DNS Resolution]]
 - [[Certificates and PKI]]
 - [[Identity in Cloud]]
+- [[LDAP Client Operations]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

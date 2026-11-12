@@ -98,6 +98,7 @@ ls -l /dev/disk/by-id/
 - [[SMART and Disk Health]]
 - [[Virtualization Troubleshooting]]
 - [[iSCSI Operations]]
+- [[Fibre Channel and FCoE]]
 - [[SCSI Persistent Reservations]]
 - [[Troubleshooting Methodology]]
 
