@@ -72,6 +72,7 @@ Kernel command line `elevator=mq-deadline` still works on many builds but udev i
 - BFQ is rarely the right choice on a database or latency-sensitive server; it spends CPU to be fair.
 
 ## Related Notes
+- [[iowatcher and blktrace]]
 
 - [[Disk I/O and Latency]]
 - [[iostat Deep Dive]]

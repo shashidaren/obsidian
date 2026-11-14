@@ -85,6 +85,7 @@ Validation is not "I hit the homepage". Name the check: p99, error ratio, replic
 - If a standard change keeps failing its own validation, it is no longer standard. Demote it until the automation is honest.
 
 ## Related Notes
+- [[Maintenance Windows and Drain]]
 
 - [[Incident Management]]
 - [[Root Cause Analysis]]

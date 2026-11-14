@@ -75,6 +75,7 @@ watch -n1 'cat /proc/sys/net/netfilter/nf_conntrack_count'
 - IPv6 has its own tracking. A v4-only check can miss v6 exhaustion.
 
 ## Related Notes
+- [[conntrack-tools]]
 
 - [[Firewall and NAT]]
 - [[nftables Deep Dive]]

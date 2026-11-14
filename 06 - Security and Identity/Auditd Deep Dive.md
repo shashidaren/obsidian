@@ -81,6 +81,7 @@ ls -lh /var/log/audit/
 - For containers, decide whether you audit the host runtime or the orchestrator. Double-logging everything is how boxes melt.
 
 ## Related Notes
+- [[AIDE and Integrity Checking]]
 
 - [[Auditing]]
 - [[SELinux Deep Dive]]

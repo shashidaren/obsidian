@@ -173,3 +173,7 @@ Browse the folders in the left explorer or use search.
 - [[Fibre Channel and FCoE]]
 - [[LDAP Client Operations]]
 - [[rsyslog Deep Dive]]
+- [[iowatcher and blktrace]]
+- [[AIDE and Integrity Checking]]
+- [[conntrack-tools]]
+- [[Maintenance Windows and Drain]]
