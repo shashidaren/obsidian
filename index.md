@@ -177,3 +177,7 @@ Browse the folders in the left explorer or use search.
 - [[AIDE and Integrity Checking]]
 - [[conntrack-tools]]
 - [[Maintenance Windows and Drain]]
+- [[polkit Deep Dive]]
+- [[cgroups v2 Deep Dive]]
+- [[User Namespaces]]
+- [[io_uring Deep Dive]]

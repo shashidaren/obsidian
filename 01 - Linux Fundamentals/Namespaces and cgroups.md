@@ -103,6 +103,8 @@ stat -fc %T /sys/fs/cgroup
 - [[Resource Requests and Limits]]
 - [[Pod Troubleshooting]]
 - [[Network Namespaces]]
+- [[cgroups v2 Deep Dive]]
+- [[User Namespaces]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
