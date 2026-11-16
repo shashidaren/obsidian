@@ -116,8 +116,8 @@ find /var/app -xdev -perm -0002 -type f          # world-writable
 
 - [[sudo]]
 - [[PAM]]
-- [[SELinux Deep Dive]]
-- [[AppArmor]]
+- [[SELinux Basics for Admins]]
+- [[AppArmor Basics for Admins]]
 - [[SSH Hardening and Troubleshooting]]
 - [[File Descriptors]]
 - [[Namespaces and cgroups]]
