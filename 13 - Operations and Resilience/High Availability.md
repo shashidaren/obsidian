@@ -110,6 +110,7 @@ hostname; ip -br addr; systemctl is-active <service>
 - [[Out of Band and IPMI]]
 - [[Troubleshooting Methodology]]
 - [[Pacemaker and Corosync]]
+- [[Keepalived and VRRP]]
 
 ## Personal Lessons Learned
 
