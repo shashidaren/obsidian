@@ -185,3 +185,7 @@ Browse the folders in the left explorer or use search.
 - [[AppArmor Basics for Admins]]
 - [[Keepalived and VRRP]]
 - [[Backup Job Health and False Greens]]
+- [[apt History and Pinning]]
+- [[Ansible for Linux Admins]]
+- [[podman Operations]]
+- [[Chaos Engineering Basics for Sysadmins]]
