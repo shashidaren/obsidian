@@ -84,6 +84,7 @@ ls -ld ~/.ssh; ls -l ~/.ssh/authorized_keys
 - [[FIDO2 SSH Keys]]
 - [[Troubleshooting Methodology]]
 - [[SSH Tunnels and Jump Hosts]]
+- [[SSH Certificates and CA]]
 
 ## Personal Lessons Learned
 
