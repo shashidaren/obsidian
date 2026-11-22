@@ -93,6 +93,7 @@ Java/Node/Python without symbols look like `Interpreter` or `[unknown]`. Use the
 - [[pidstat Deep Dive]]
 - [[strace Deep Dive]]
 - [[bpftrace]]
+- [[SystemTap]]
 - [[CPU Scheduling and Load Average]]
 - [[Processes and Threads]]
 - [[Performance Investigation Framework]]

@@ -103,6 +103,7 @@ Mail or a monitoring check on `/proc/mdstat` is part of the setup. An array that
 - [[iostat Deep Dive]]
 - [[Backup Strategy]]
 - [[Disaster Recovery]]
+- [[RAID Resync and Rebuild]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

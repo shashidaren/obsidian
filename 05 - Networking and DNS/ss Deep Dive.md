@@ -132,6 +132,7 @@ ss -tan | awk 'NR>1 {print $1}' | sort | uniq -c | sort -nr
 - [[tcpdump Deep Dive]]
 - [[ip Command Deep Dive]]
 - [[Connection Exhaustion]]
+- [[SO_REUSEPORT]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

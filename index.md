@@ -193,3 +193,7 @@ Browse the folders in the left explorer or use search.
 - [[IPsec and strongSwan]]
 - [[numactl and Memory Binding]]
 - [[Magic SysRq]]
+- [[SystemTap]]
+- [[SO_REUSEPORT]]
+- [[RAID Resync and Rebuild]]
+- [[SSH Agent and Agent Forwarding]]
