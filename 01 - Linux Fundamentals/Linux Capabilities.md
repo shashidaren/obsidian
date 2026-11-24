@@ -96,6 +96,7 @@ Common useful caps for services:
 - [[AppArmor]]
 - [[Namespaces and cgroups]]
 - [[sysctl and Resource Limits]]
+- [[File Capabilities]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

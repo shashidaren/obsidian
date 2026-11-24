@@ -86,6 +86,7 @@ edquota -t
 - [[Disk Full Runbook]]
 - [[XFS Operations]]
 - [[ext4 Operations]]
+- [[Project Quotas and xfs_quota]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

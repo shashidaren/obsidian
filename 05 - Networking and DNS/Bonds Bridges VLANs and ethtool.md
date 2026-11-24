@@ -100,6 +100,7 @@ Persist ring/offload changes via NetworkManager, systemd-networkd, or a udev rul
 - [[systemd-networkd]]
 - [[Path MTU Discovery and Blackholes]]
 - [[VXLAN and Geneve]]
+- [[Dummy VETH and Macvlan]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
