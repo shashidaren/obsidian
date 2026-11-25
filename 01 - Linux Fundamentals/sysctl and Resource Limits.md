@@ -117,6 +117,7 @@ Then `systemctl daemon-reload` and restart the unit. Confirm with `/proc/<new-pi
 - [[PAM]]
 - [[ss Deep Dive]]
 - [[lsof Deep Dive]]
+- [[ARP Cache Overflow and Neighbor Table]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

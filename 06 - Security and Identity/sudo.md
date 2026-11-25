@@ -106,6 +106,7 @@ Drop-ins: filename without dots if your sudo is old (`alice` not `alice.rules` o
 - [[Secrets Management]]
 - [[Change Management]]
 - [[polkit Deep Dive]]
+- [[sudoers Deep Dive]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

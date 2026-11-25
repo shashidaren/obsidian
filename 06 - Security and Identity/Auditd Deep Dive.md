@@ -92,6 +92,7 @@ ls -lh /var/log/audit/
 - [[journalctl Deep Dive]]
 - [[Logging Architecture]]
 - [[Incident Management]]
+- [[acct and Process Accounting]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

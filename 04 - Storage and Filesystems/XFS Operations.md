@@ -111,6 +111,7 @@ xfsrestore -f /backup/data.xfsdump /restore-target
 - [[Inodes]]
 - [[Disk I/O and Latency]]
 - [[fstab and Mount Options]]
+- [[XFS Repair and Metadata]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned

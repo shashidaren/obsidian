@@ -92,6 +92,7 @@ fstab pass field: 0 = never, 1 = root (first), 2 = others. Large data volumes ar
 - [[Linux Boot Process]]
 - [[LVM Deep Dive]]
 - [[Disk Full Runbook]]
+- [[XFS Repair and Metadata]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
