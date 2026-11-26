@@ -101,6 +101,8 @@ dmsetup ls --tree
 - [[Performance Investigation Framework]]
 - [[Troubleshooting Methodology]]
 - [[iotop Deep Dive]]
+- [[blktrace Deep Dive]]
+- [[iowatcher Deep Dive]]
 
 ## Personal Lessons Learned
 
