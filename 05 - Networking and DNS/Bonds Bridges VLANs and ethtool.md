@@ -4,7 +4,7 @@
 
 Bonding aggregates two or more physical NICs into one logical interface for redundancy or bandwidth. Bridges are in-kernel L2 switches (used by VMs, containers, or to join physical and virtual ports). macvlan creates a virtual NIC with its own MAC address on a parent, without a full learning bridge. VLANs (802.1Q) tag frames on a parent interface so multiple logical networks share one physical link.
 
-ethtool is the tool that talks to the physical NIC driver: link speed/duplex, ring buffers, offloads, and hardware statistics including error and drop counters.
+ethtool is the tool that talks to the physical NIC driver: link speed/duplex, ring buffers, offloads, and hardware statistics including error and drop counters. See [[ethtool Deep Dive]] for more.
 
 ## Why it matters
 
@@ -101,6 +101,7 @@ Persist ring/offload changes via NetworkManager, systemd-networkd, or a udev rul
 - [[Path MTU Discovery and Blackholes]]
 - [[VXLAN and Geneve]]
 - [[Dummy VETH and Macvlan]]
+- [[ethtool Deep Dive]]
 - [[Troubleshooting Methodology]]
 
 ## Personal Lessons Learned
