@@ -4,7 +4,7 @@
 
 NUMA (Non-Uniform Memory Access) means memory is attached to specific CPU sockets. Accessing memory on the local node is fast; crossing the interconnect is slower. The kernel tries to allocate local, but a process can still be scheduled on the wrong node or have its pages migrated.
 
-`numactl`, `numastat`, and `/sys/devices/system/node` show the topology and where pages live. See [[numastat Deep Dive]] for measurement details.
+`numactl`, `numastat`, and `/sys/devices/system/node` show the topology and where pages live. See [[numastat Deep Dive]] for measurement details and [[numactl Deep Dive]] for binding.
 
 ## Why it matters
 
@@ -70,6 +70,7 @@ numastat
 ## Related Notes
 
 - [[numastat Deep Dive]]
+- [[numactl Deep Dive]]
 - [[Memory Management]]
 - [[CPU Scheduling and Load Average]]
 - [[High CPU Runbook]]
