@@ -119,6 +119,7 @@ Exact tooling (Bacula, Borg, restic, Velero, cloud native snapshots, vendor agen
 - [[Incident Management]]
 - [[Alert Design]]
 - [[Troubleshooting Methodology]]
+- [[Filesystem Freeze for Consistent Backups]]
 
 ## Personal Lessons Learned
 
