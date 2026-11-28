@@ -86,6 +86,7 @@ ls -ld ~/.ssh; ls -l ~/.ssh/authorized_keys
 - [[SSH Tunnels and Jump Hosts]]
 - [[SSH Certificates and CA]]
 - [[SSH Agent and Agent Forwarding]]
+- [[SSH ControlMaster and Multiplexing]]
 
 ## Personal Lessons Learned
 
